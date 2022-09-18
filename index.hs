@@ -7,6 +7,14 @@ import Data.Char (isDigit, isLetter)
 
 main :: IO ()
 main=do
+  let tokens=toTokenList "{\"array\":[\"one\",{},65536,[1,2,3],\"three.js\",true,false]}"
+  let array=jsonArray "array" tokens
+  print $ arrayjsonString 0 array
+  print $ arrayjsonNumber 2 array
+  print $ arrayjsonBoolean 4 array
+  print $ arrayjsonBoolean 5 array
+
+test=do
   let tokens=toTokenList "{\"boolT\":true,\"taxi\":1729,\"boolF\":false,\"string\":\"oh waaa\",\"number\":42,\"minus\":-12,\"shousu\":3.14}"
   print $ jsonBoolean "boolT" tokens
   print $ jsonNumber "taxi" tokens
@@ -15,7 +23,7 @@ main=do
   print $ jsonNumber "number" tokens
   print $ jsonNumber "minus" tokens
   print $ jsonNumber "shousu" tokens
-  
+
 
   putStrLn ""
 
@@ -26,9 +34,12 @@ main=do
   print $ jsonString "levelStr" lv2
   let lv3=jsonObject "nest" lv2
   print $ tokenToString lv3
+  let arr=jsonArray "arr" lv3
+  print $ tokenToString arr
+  print $ arrayjsonString 0 arr
+  print $ arrayjsonNumber 1 arr
 
-  --putStrLn ""
-  --print $ toTokenList "[1,\"へろー\",[true,{\"thisId\":\"nested Object\"}]]"
+
 
 
 tokenToString :: [(a, [b])] -> [b]
@@ -79,8 +90,8 @@ tailObjectClose (token:tokens)
 tailArrayClose :: [(String, String)] -> [(String, String)]
 tailArrayClose (token:tokens)
   |null tokens=[]
-  |fst token=="Array_OPEN"=tailArrayClose $ tailArrayClose tokens
-  |fst token=="Array_CLOSE"=tokens
+  |fst token=="ARRAY_OPEN"=tailArrayClose $ tailArrayClose tokens
+  |fst token=="ARRAY_CLOSE"=tokens
   |otherwise=tailArrayClose tokens
 
 --オブジェクトを一つ返す
@@ -92,6 +103,15 @@ getAnObject (token:tokens)
     let obj=getAnObject tokens
     let as=getAnObject (drop (length obj) tokens)
     token:if fst token=="OBJECT_OPEN" then obj++as else getAnObject tokens
+
+getAnArray :: [(String,String)] -> [(String,String)]
+getAnArray (token:tokens)
+  |null tokens=[token]
+  |fst token=="ARRAY_CLOSE"=[token]
+  |otherwise=do
+    let arr=getAnArray tokens
+    let as=getAnArray (drop (length arr) tokens)
+    token:if fst token=="ARRAY_OPEN" then arr++as else getAnArray tokens
 
 
 --含まれていれば返す
@@ -120,6 +140,21 @@ jsonObject :: String -> [(String, String)] -> [(String, String)]
 jsonObject key (token:tokens)
   |fst token=="OBJECT_OPEN"=getObject key tokens
 
+jsonArray :: String -> [(String, String)] -> [(String, String)]
+jsonArray key (token:tokens)
+  |fst token=="OBJECT_OPEN"=getObjectArray key tokens
+
+arrayjsonString :: Int -> [([Char], String)] -> String
+arrayjsonString index (token:tokens)
+  |fst token=="ARRAY_OPEN"=getArrayString index tokens
+
+arrayjsonNumber :: Int -> [([Char], String)] -> Int
+arrayjsonNumber index (token:tokens)
+  |fst token=="ARRAY_OPEN"=getArrayNumber index tokens
+
+arrayjsonBoolean :: Int -> [([Char], String)] -> Bool
+arrayjsonBoolean index (token:tokens)
+  |fst token=="ARRAY_OPEN"=getArrayBoolean index tokens
 
 getObjectString :: String -> [(String, String)] -> String
 getObjectString key (token:token':tokens)
@@ -136,7 +171,7 @@ getObjectString key (token:token':tokens)
 
 getObjectNumber :: String -> [(String, String)] -> Int
 getObjectNumber key (token:token':tokens)
-  |null tokens=(-1)
+  |null tokens= -1
   |otherwise=case fst token of
     "KEY"
       |snd token == key ->do
@@ -165,12 +200,53 @@ getObject key (token:tokens)
   |null tokens=[("","")]
   |otherwise=case fst token of
     "KEY"
-      |snd token == key ->do
+      |snd token == key ->
         if fst (head tokens) == "COLON" && fst (tokens!!1) == "OBJECT_OPEN" then (tokens!!1):getAnObject (drop 2 tokens) else [("","")]
       |otherwise->getObject key tokens
-    "OBJECT_OPEN"->getObject key (tailObjectClose tokens)
-    "ARRAY_OPEN"->getObject key (tailArrayClose tokens)
+    "OBJECT_OPEN"->getObject key $ tailObjectClose tokens
+    "ARRAY_OPEN"->getObject key $ tailArrayClose tokens
     _->getObject key tokens
+
+getObjectArray :: String -> [(String, String)] -> [(String, String)]
+getObjectArray key (token:tokens)
+  |null tokens=[("","")]
+  |otherwise=case fst token of
+    "KEY"
+      |snd token == key->
+        if fst (head tokens) == "COLON" && fst (tokens!!1) == "ARRAY_OPEN" then (tokens!!1):getAnArray (drop 2 tokens) else [("","")]
+      |otherwise->getObjectArray key tokens
+    "OBJECT_OPEN"->getObjectArray key $ tailObjectClose tokens
+    "ARRAY_OPEN"->getObjectArray key $ tailArrayClose tokens
+    _->getObjectArray key tokens
+
+
+getArrayString :: Int -> [(String, String)] -> String
+getArrayString index (token:tokens)
+  |null tokens="UNSOLVED"
+  |index<0="MINUS"
+  |index==0=snd token
+  |fst token=="OBJECT_OPEN"=getArrayString (index-1) $ tail $ tailObjectClose tokens
+  |fst token=="ARRAY_OPEN"=getArrayString (index-1) $ tail $ tailArrayClose tokens
+  |fst (head tokens)=="COMMA"=getArrayString (index-1) $ tail tokens
+
+getArrayNumber ::Int -> [(String, String)] -> Int
+getArrayNumber index (token:tokens)
+  |null tokens=9999
+  |index<0= -999
+  |index==0=read $ snd token ::Int
+  |fst token=="OBJECT_OPEN"=getArrayNumber (index-1) $ tail $ tailObjectClose tokens
+  |fst token=="ARRAY_OPEN"=getArrayNumber (index-1) $ tail $ tailArrayClose tokens
+  |fst (head tokens)=="COMMA"=getArrayNumber (index-1) $ tail tokens
+
+
+getArrayBoolean :: Int -> [(String, String)] -> Bool
+getArrayBoolean index (token:tokens)
+  |null tokens=False
+  |index<0=False
+  |index==0=snd token=="true"
+  |fst token=="OBJECT_OPEN"=getArrayBoolean (index-1) $ tail $ tailObjectClose tokens
+  |fst token=="ARRAY_OPEN"=getArrayBoolean (index-1) $ tail $ tailArrayClose tokens
+  |fst (head tokens)=="COMMA"=getArrayBoolean (index-1) $ tail tokens
 
 objectToTokenList :: String -> [(String,String)] -> ([(String,String)],String)
 objectToTokenList (x:xs) tokens
