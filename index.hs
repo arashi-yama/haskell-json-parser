@@ -2,33 +2,39 @@
 import Control.Exception (SomeException(SomeException), catch)
 import Data.Char (isDigit, isLetter)
 --TODO:例外処理
---Numberの小数、マイナス
 --Array
 
 main :: IO ()
 main=do
-  let tokens=toTokenList "{\"array\":[\"one\",{},65536,[1,2,3],\"three.js\",true,false]}"
+  let tokens=toTokenList "{\"number\":42,\"minus\":-12,\"shousu\":3.14}"
+  print tokens
+arrayTest :: IO ()
+arrayTest=do
+  let tokens=toTokenList "{\"array\":[\"one\",{},65536,[1,2,3],\"three.js\",true,false,1.414]}"
   let array=jsonArray "array" tokens
+  print array
   print $ arrayjsonString 0 array
-  print $ arrayjsonNumber 2 array
+  print $ arrayjsonInt 2 array
   print $ arrayjsonBoolean 4 array
   print $ arrayjsonBoolean 5 array
+  print $ arrayjsonDouble 7 array
 
+test :: IO ()
 test=do
   let tokens=toTokenList "{\"boolT\":true,\"taxi\":1729,\"boolF\":false,\"string\":\"oh waaa\",\"number\":42,\"minus\":-12,\"shousu\":3.14}"
   print $ jsonBoolean "boolT" tokens
-  print $ jsonNumber "taxi" tokens
+  print $ jsonInt "taxi" tokens
   print $ jsonBoolean "BoolF" tokens
   print $ jsonString "string" tokens
-  print $ jsonNumber "number" tokens
-  print $ jsonNumber "minus" tokens
-  print $ jsonNumber "shousu" tokens
+  print $ jsonInt "number" tokens
+  print $ jsonInt "minus" tokens
+  print $ jsonDouble "shousu" tokens
 
 
   putStrLn ""
 
   let nest=toTokenList "{\"level\":  3 ,  \"next\" :  {\"levelStr\"  :  \"2\" , \"nest\":{\"arr\":[\"str\",6,[{}]]}}}"
-  print $ jsonNumber "level" nest
+  print $ jsonInt "level" nest
   let lv2=jsonObject "next" nest
   print $ tokenToString lv2
   print $ jsonString "levelStr" lv2
@@ -37,7 +43,7 @@ test=do
   let arr=jsonArray "arr" lv3
   print $ tokenToString arr
   print $ arrayjsonString 0 arr
-  print $ arrayjsonNumber 1 arr
+  print $ arrayjsonInt 1 arr
 
 
 
@@ -119,7 +125,8 @@ isOneOf :: String-> String -> (Char, String)
 isOneOf s (x:xs)
  |x `elem` s =(x,xs)
 
-
+isNumber :: Char -> Bool
+isNumber x=isDigit x || x=='-' ||x=='.'
 
 toTokenList :: String -> [(String, String)]
 toTokenList json=fst (objectToTokenList json [])
@@ -128,9 +135,13 @@ jsonString :: String -> [(String, String)] -> String
 jsonString key (token:tokens)
   |fst token=="OBJECT_OPEN" =getObjectString key tokens
 
-jsonNumber :: String -> [(String, String)] -> Int
-jsonNumber key (token:tokens)
-  |fst token=="OBJECT_OPEN" = getObjectNumber key tokens
+jsonInt :: String -> [(String, String)] -> Int
+jsonInt key (token:tokens)
+  |fst token=="OBJECT_OPEN" = read $ getObjectNumber key tokens::Int
+
+jsonDouble :: String -> [(String, String)] -> Double
+jsonDouble key (token:tokens)
+  |fst token=="OBJECT_OPEN" = read $ getObjectNumber key tokens::Double
 
 jsonBoolean :: String -> [(String, String)] -> Bool
 jsonBoolean key (token:tokens)
@@ -144,15 +155,19 @@ jsonArray :: String -> [(String, String)] -> [(String, String)]
 jsonArray key (token:tokens)
   |fst token=="OBJECT_OPEN"=getObjectArray key tokens
 
-arrayjsonString :: Int -> [([Char], String)] -> String
+arrayjsonString :: Int -> [(String, String)] -> String
 arrayjsonString index (token:tokens)
   |fst token=="ARRAY_OPEN"=getArrayString index tokens
 
-arrayjsonNumber :: Int -> [([Char], String)] -> Int
-arrayjsonNumber index (token:tokens)
-  |fst token=="ARRAY_OPEN"=getArrayNumber index tokens
+arrayjsonInt :: Int -> [(String, String)] -> Int
+arrayjsonInt index (token:tokens)
+  |fst token=="ARRAY_OPEN"=read $ getArrayNumber index tokens
 
-arrayjsonBoolean :: Int -> [([Char], String)] -> Bool
+arrayjsonDouble :: Int -> [(String, String)] -> Double
+arrayjsonDouble index (token:tokens)
+  |fst token=="ARRAY_OPEN"=read $ getArrayNumber index tokens
+
+arrayjsonBoolean :: Int -> [(String, String)] -> Bool
 arrayjsonBoolean index (token:tokens)
   |fst token=="ARRAY_OPEN"=getArrayBoolean index tokens
 
@@ -169,14 +184,14 @@ getObjectString key (token:token':tokens)
     "ARRAY_OPEN"->getObjectString key (tailArrayClose tokens)
     _->getObjectString key (token':tokens)
 
-getObjectNumber :: String -> [(String, String)] -> Int
+getObjectNumber :: String -> [(String, String)] -> String
 getObjectNumber key (token:token':tokens)
-  |null tokens= -1
+  |null tokens= "wawawa"
   |otherwise=case fst token of
     "KEY"
       |snd token == key ->do
         let (valueType,value)=head tokens
-        if fst token' == "COLON" && valueType == "NUMBER" then read value::Int else 0
+        if fst token' == "COLON" && valueType == "NUMBER" then value else "wowowo"
       |otherwise->getObjectNumber key (token':tokens)
     "OBJECT_OPEN"->getObjectNumber key (tailObjectClose tokens)
     "ARRAY_OPEN"->getObjectNumber key (tailArrayClose tokens)
@@ -229,11 +244,11 @@ getArrayString index (token:tokens)
   |fst token=="ARRAY_OPEN"=getArrayString (index-1) $ tail $ tailArrayClose tokens
   |fst (head tokens)=="COMMA"=getArrayString (index-1) $ tail tokens
 
-getArrayNumber ::Int -> [(String, String)] -> Int
+getArrayNumber ::Int -> [(String, String)] -> String
 getArrayNumber index (token:tokens)
-  |null tokens=9999
-  |index<0= -999
-  |index==0=read $ snd token ::Int
+  |index<0= "minus"
+  |index==0=snd token
+  |null tokens="null"
   |fst token=="OBJECT_OPEN"=getArrayNumber (index-1) $ tail $ tailObjectClose tokens
   |fst token=="ARRAY_OPEN"=getArrayNumber (index-1) $ tail $ tailArrayClose tokens
   |fst (head tokens)=="COMMA"=getArrayNumber (index-1) $ tail tokens
@@ -265,7 +280,7 @@ objectToTokenList (x:xs) tokens
     then objectToTokenList (back (=='"') xs) (tokens++[("KEY",many (/='"') xs)])
     else if fst (last tokens)=="COLON" then objectToTokenList (back (=='"') xs) (tokens++[("STRING",many (/='"') xs)])
     else objectToTokenList xs (tokens++[("UNSOLVED",[x])])
-  |fst (last tokens)=="COLON"= if isDigit x then objectToTokenList (back' (not . isDigit) xs) (tokens++[("NUMBER",x:many isDigit xs)])
+  |fst (last tokens)=="COLON"= if isNumber x then objectToTokenList (back' (not . isNumber) xs) (tokens++[("NUMBER",x:many isNumber xs)])
     else if take 4 (x:xs) =="true" then objectToTokenList (drop 3 xs) (tokens++[("BOOLEAN","true")])
     else if take 5 (x:xs) =="false" then objectToTokenList (drop 4 xs) (tokens++[("BOOLEAN","false")])
     else objectToTokenList xs (tokens++[("UNSOLVED",[x])])
@@ -285,7 +300,7 @@ arrayToTokenList (x:xs) tokens
   |x==']'=arrayToTokenList xs (tokens++[("ARRAY_CLOSE","]")])
   |x==','=arrayToTokenList xs (tokens++[("COMMA",",")])
   |x=='"'=arrayToTokenList (back (=='"') xs) (tokens++[("STRING",many (/='"') xs)])
-  |isDigit x=arrayToTokenList (back' (not . isDigit) xs) (tokens++[("NUMBER",x:many isDigit xs)])
+  |isNumber x=arrayToTokenList (back' (not . isNumber) xs) (tokens++[("NUMBER",x:many isNumber xs)])
   |take 4 (x:xs) =="true"=arrayToTokenList (drop 3 xs) (tokens++[("BOOLEAN","true")])
   |take 5 (x:xs) =="false"=arrayToTokenList  (drop 4 xs) (tokens++[("BOOLEAN","false")])
   |otherwise=arrayToTokenList xs (tokens++[("UNSOLVED",[x])])
