@@ -6,18 +6,39 @@ import Data.Char (isDigit, isLetter)
 
 main :: IO ()
 main=do
-  let tokens=toTokenList "{\"number\":42,\"minus\":-12,\"shousu\":3.14}"
-  print tokens
+  readFile "./test.json"
+  arrayTest
+  test
+
+
 arrayTest :: IO ()
 arrayTest=do
-  let tokens=toTokenList "{\"array\":[\"one\",{},65536,[1,2,3],\"three.js\",true,false,1.414]}"
+  let tokens=toTokenList "{\"array\":[\"one\",{\"aiueo\":[\"kakikukeko\"]},65536,[1,2,3],\"three.js\",true,false,1.414]}"
   let array=jsonArray "array" tokens
   print array
   print $ arrayjsonString 0 array
+  let obj=arrayjsonObject 1 array
+  let arr=jsonArray "aiueo" obj
+  print $ arrayjsonString 0 arr
   print $ arrayjsonInt 2 array
+  let ary=arrayjsonArray 3 array
+  print $ tokenToString ary
+  print $ arrayjsonInt 0 ary
+  print $ arrayjsonInt 1 ary
+  print $ arrayjsonInt 2 ary
   print $ arrayjsonBoolean 4 array
   print $ arrayjsonBoolean 5 array
   print $ arrayjsonDouble 7 array
+  let array2=toTokenList "[0,1,2,\"Fizz\",4 , \"Bazz\"]"
+  putStrLn ""
+  print array2
+  print $ arrayjsonInt 0 array2
+  print $ arrayjsonInt 1 array2
+  print $ arrayjsonInt 2 array2
+  print $ arrayjsonString 3 array2
+  print $ arrayjsonInt 4 array2
+  print $ arrayjsonString 5 array2
+  print array2
 
 test :: IO ()
 test=do
@@ -161,15 +182,23 @@ arrayjsonString index (token:tokens)
 
 arrayjsonInt :: Int -> [(String, String)] -> Int
 arrayjsonInt index (token:tokens)
-  |fst token=="ARRAY_OPEN"=read $ getArrayNumber index tokens
+  |fst token=="ARRAY_OPEN"=read $ getArrayNumber index tokens::Int
 
 arrayjsonDouble :: Int -> [(String, String)] -> Double
 arrayjsonDouble index (token:tokens)
-  |fst token=="ARRAY_OPEN"=read $ getArrayNumber index tokens
+  |fst token=="ARRAY_OPEN"=read $ getArrayNumber index tokens::Double
 
 arrayjsonBoolean :: Int -> [(String, String)] -> Bool
 arrayjsonBoolean index (token:tokens)
   |fst token=="ARRAY_OPEN"=getArrayBoolean index tokens
+
+arrayjsonObject :: Int -> [([Char], String)] -> [([Char], [Char])]
+arrayjsonObject index (token:tokens)
+  |fst token=="ARRAY_OPEN"=getArrayObject index tokens
+
+arrayjsonArray :: Int -> [([Char], String)] -> [([Char], [Char])]
+arrayjsonArray index (token:tokens)
+  |fst token=="ARRAY_OPEN"=getArrayArray index tokens
 
 getObjectString :: String -> [(String, String)] -> String
 getObjectString key (token:token':tokens)
@@ -262,6 +291,24 @@ getArrayBoolean index (token:tokens)
   |fst token=="OBJECT_OPEN"=getArrayBoolean (index-1) $ tail $ tailObjectClose tokens
   |fst token=="ARRAY_OPEN"=getArrayBoolean (index-1) $ tail $ tailArrayClose tokens
   |fst (head tokens)=="COMMA"=getArrayBoolean (index-1) $ tail tokens
+
+getArrayArray :: (Ord a, Num a) => a -> [(String, String)] -> [([Char], [Char])]
+getArrayArray index (token:tokens)
+  |null tokens=[("","")]
+  |index<0=[("","")]
+  |index==0=token:getAnArray tokens
+  |fst token=="OBJECT_OPEN"=getArrayArray (index-1) $ tail $ tailObjectClose tokens
+  |fst token=="ARRAY_OPEN"=getArrayArray (index-1) $ tail $ tailArrayClose tokens
+  |fst (head tokens)=="COMMA"=getArrayArray (index-1) $ tail tokens
+
+getArrayObject :: (Ord a, Num a) => a -> [(String, String)] -> [([Char], [Char])]
+getArrayObject index (token:tokens)
+  |null tokens=[("","")]
+  |index<0=[("","")]
+  |index==0=token:getAnObject tokens
+  |fst token=="OBJECT_OPEN"=getArrayObject (index-1) $ tail $ tailObjectClose tokens
+  |fst token=="ARRAY_OPEN"=getArrayObject (index-1) $ tail $ tailArrayClose tokens
+  |fst (head tokens)=="COMMA"=getArrayObject (index-1) $ tail tokens
 
 objectToTokenList :: String -> [(String,String)] -> ([(String,String)],String)
 objectToTokenList (x:xs) tokens
