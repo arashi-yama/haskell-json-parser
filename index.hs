@@ -1,84 +1,10 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
-import Control.Exception (SomeException(SomeException), catch)
+module Index where
 import Data.Char (isDigit, isLetter)
 --TODO:例外処理
---Array
 
-main :: IO ()
-main=do
-  readFile "./test.json"
-  arrayTest
-  test
-
-
-arrayTest :: IO ()
-arrayTest=do
-  let tokens=toTokenList "{\"array\":[\"one\",{\"aiueo\":[\"kakikukeko\"]},65536,[1,2,3],\"three.js\",true,false,1.414]}"
-  let array=jsonArray "array" tokens
-  print array
-  print $ arrayjsonString 0 array
-  let obj=arrayjsonObject 1 array
-  let arr=jsonArray "aiueo" obj
-  print $ arrayjsonString 0 arr
-  print $ arrayjsonInt 2 array
-  let ary=arrayjsonArray 3 array
-  print $ tokenToString ary
-  print $ arrayjsonInt 0 ary
-  print $ arrayjsonInt 1 ary
-  print $ arrayjsonInt 2 ary
-  print $ arrayjsonBoolean 4 array
-  print $ arrayjsonBoolean 5 array
-  print $ arrayjsonDouble 7 array
-  let array2=toTokenList "[0,1,2,\"Fizz\",4 , \"Bazz\"]"
-  putStrLn ""
-  print array2
-  print $ arrayjsonInt 0 array2
-  print $ arrayjsonInt 1 array2
-  print $ arrayjsonInt 2 array2
-  print $ arrayjsonString 3 array2
-  print $ arrayjsonInt 4 array2
-  print $ arrayjsonString 5 array2
-  print array2
-
-test :: IO ()
-test=do
-  let tokens=toTokenList "{\"boolT\":true,\"taxi\":1729,\"boolF\":false,\"string\":\"oh waaa\",\"number\":42,\"minus\":-12,\"shousu\":3.14}"
-  print $ jsonBoolean "boolT" tokens
-  print $ jsonInt "taxi" tokens
-  print $ jsonBoolean "BoolF" tokens
-  print $ jsonString "string" tokens
-  print $ jsonInt "number" tokens
-  print $ jsonInt "minus" tokens
-  print $ jsonDouble "shousu" tokens
-
-
-  putStrLn ""
-
-  let nest=toTokenList "{\"level\":  3 ,  \"next\" :  {\"levelStr\"  :  \"2\" , \"nest\":{\"arr\":[\"str\",6,[{}]]}}}"
-  print $ jsonInt "level" nest
-  let lv2=jsonObject "next" nest
-  print $ tokenToString lv2
-  print $ jsonString "levelStr" lv2
-  let lv3=jsonObject "nest" lv2
-  print $ tokenToString lv3
-  let arr=jsonArray "arr" lv3
-  print $ tokenToString arr
-  print $ arrayjsonString 0 arr
-  print $ arrayjsonInt 1 arr
-
-
-
-
-tokenToString :: [(a, [b])] -> [b]
-tokenToString=concatMap snd
-
-anyChar :: String -> (Char, String)
-anyChar (x:xs)=(x,xs)
-
---合致すれば返す
-satisfy :: (a -> Bool) -> [a] -> (a, [a])
-satisfy f (x:xs)
-  |f x=(x,xs)
+tokenToString :: [(String, String)] -> String
+tokenToString=concatMap (\(tkn,value)->if tkn=="KEY"||tkn=="STRING" then "\""++value++"\"" else value)
 
 --合致している間返す
 many :: (Char -> Bool) -> String -> String
@@ -99,12 +25,6 @@ back' f (x:xs)
   |f x=x:xs
   |null xs=""
   |otherwise=back' f xs
-
-backToken :: String -> [(String, String)] -> [(String, String)]
-backToken token (x:xs)
-  |token==fst x=xs
-  |null xs=[]
-  |otherwise=backToken token xs
 
 --初めて余った閉じカッコ以降を返す
 tailObjectClose :: [(String, String)] -> [(String, String)]
@@ -140,11 +60,6 @@ getAnArray (token:tokens)
     let as=getAnArray (drop (length arr) tokens)
     token:if fst token=="ARRAY_OPEN" then arr++as else getAnArray tokens
 
-
---含まれていれば返す
-isOneOf :: String-> String -> (Char, String)
-isOneOf s (x:xs)
- |x `elem` s =(x,xs)
 
 isNumber :: Char -> Bool
 isNumber x=isDigit x || x=='-' ||x=='.'
@@ -192,11 +107,11 @@ arrayjsonBoolean :: Int -> [(String, String)] -> Bool
 arrayjsonBoolean index (token:tokens)
   |fst token=="ARRAY_OPEN"=getArrayBoolean index tokens
 
-arrayjsonObject :: Int -> [([Char], String)] -> [([Char], [Char])]
+arrayjsonObject :: Int -> [(String, String)] -> [(String, String)]
 arrayjsonObject index (token:tokens)
   |fst token=="ARRAY_OPEN"=getArrayObject index tokens
 
-arrayjsonArray :: Int -> [([Char], String)] -> [([Char], [Char])]
+arrayjsonArray :: Int -> [(String, String)] -> [(String, String)]
 arrayjsonArray index (token:tokens)
   |fst token=="ARRAY_OPEN"=getArrayArray index tokens
 
@@ -292,7 +207,7 @@ getArrayBoolean index (token:tokens)
   |fst token=="ARRAY_OPEN"=getArrayBoolean (index-1) $ tail $ tailArrayClose tokens
   |fst (head tokens)=="COMMA"=getArrayBoolean (index-1) $ tail tokens
 
-getArrayArray :: (Ord a, Num a) => a -> [(String, String)] -> [([Char], [Char])]
+getArrayArray :: Int -> [(String, String)] -> [(String, String)]
 getArrayArray index (token:tokens)
   |null tokens=[("","")]
   |index<0=[("","")]
@@ -301,7 +216,7 @@ getArrayArray index (token:tokens)
   |fst token=="ARRAY_OPEN"=getArrayArray (index-1) $ tail $ tailArrayClose tokens
   |fst (head tokens)=="COMMA"=getArrayArray (index-1) $ tail tokens
 
-getArrayObject :: (Ord a, Num a) => a -> [(String, String)] -> [([Char], [Char])]
+getArrayObject ::Int-> [(String, String)] -> [(String, String)]
 getArrayObject index (token:tokens)
   |null tokens=[("","")]
   |index<0=[("","")]
@@ -351,10 +266,3 @@ arrayToTokenList (x:xs) tokens
   |take 4 (x:xs) =="true"=arrayToTokenList (drop 3 xs) (tokens++[("BOOLEAN","true")])
   |take 5 (x:xs) =="false"=arrayToTokenList  (drop 4 xs) (tokens++[("BOOLEAN","false")])
   |otherwise=arrayToTokenList xs (tokens++[("UNSOLVED",[x])])
-
-
-parseTest :: Show a => (t -> (a, b)) -> t -> IO ()
-parseTest p s = do
-    print $ fst $ p s
-    `catch` \(SomeException e) ->
-        putStr $ show e
