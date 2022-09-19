@@ -1,29 +1,34 @@
-import Index (toTokenList,jsonString,jsonInt,jsonDouble,jsonBoolean,jsonArray,jsonObject,arrayjsonInt,arrayjsonDouble,arrayjsonString,arrayjsonArray,arrayjsonObject,tokenToString,arrayjsonBoolean)
+import Index (toTokenList,jsonString,jsonInt,jsonDouble,jsonBoolean,jsonArray,jsonObject,arrayjsonInt,arrayjsonDouble,arrayjsonString,arrayjsonArray,arrayjsonObject,tokenToString,arrayjsonBoolean, getObject, rootJson, rootArrayjson)
 
 main :: IO ()
 main=do
   json<-readFile "./example.json"
-  let root=toTokenList json
+  let root=rootJson json
   print $ jsonString "name" root                         --haskell-json-parser
   print $ jsonInt "version" root                         --0
-  print $ arrayjsonString 0 (jsonArray "authors" root)   --arashiyama
+  let authors=jsonArray "authors" root              
+  print $ arrayjsonString 0 authors                       --arashiyama
   let primes=jsonArray "primes" root
   print [arrayjsonInt x primes|x<-[0..8]]                --[2,3,5,7,9,11,13,17,19]
-
   let intro=jsonObject "introduceMyself" root
-  print $ jsonBoolean "male" intro                       --true
-  print $ jsonBoolean "famale" intro                     --false
+  print $ jsonBoolean "male" intro                       --True
+  print $ jsonBoolean "famale" intro                     --False
   print $ jsonDouble "most like number" intro            --3.14
   print $ jsonString "date" intro                        --2022-09-19T10:38:00Z
   let programingLangs=jsonArray "programing languages" intro
-
   let js=arrayjsonObject 0 programingLangs
   print $ jsonString "name" js                           --JavaScript
   print $ jsonString "skill" js                          --noob
 
-  putStrLn $ tokenToString programingLangs               --[{"name":"JavaScript","skill":"noob"},{"name":"Kotlin","skill":"noob"},{"name":"Haskell","skill":"noob"}]
-  --print json
+  putStrLn $ tokenToString programingLangs           --[{"name":"JavaScript","skill":"noob"},{"name":"Kotlin","skill":"noob"},{"name":"Haskell","skill":"noob"}]
 
+realTest=do
+  let json="{\"test\":{\"hoge\":1},\"nna\":\"wowo\"}"
+  let root=tail $ rootJson json
+  print root
+  let obj=getObject "test" root
+  print $ jsonInt "hoge" obj
+  print obj
 
 arrayTest :: IO ()
 arrayTest=do
@@ -40,10 +45,12 @@ arrayTest=do
   print $ arrayjsonInt 0 ary
   print $ arrayjsonInt 1 ary
   print $ arrayjsonInt 2 ary
-  print $ arrayjsonBoolean 4 array
+
+  print $ arrayjsonString 4 array
   print $ arrayjsonBoolean 5 array
+  print $ arrayjsonBoolean 6 array
   print $ arrayjsonDouble 7 array
-  let array2=toTokenList "[0,1,2,\"Fizz\",4 , \"Bazz\"]"
+  let array2=rootArrayjson "[0,1,2,\"Fizz\",4 , \"Bazz\"]"
   putStrLn ""
   print array2
   print $ arrayjsonInt 0 array2
@@ -59,7 +66,7 @@ test=do
   let tokens=toTokenList "{\"boolT\":true,\"taxi\":1729,\"boolF\":false,\"string\":\"oh waaa\",\"number\":42,\"minus\":-12,\"shousu\":3.14}"
   print $ jsonBoolean "boolT" tokens
   print $ jsonInt "taxi" tokens
-  print $ jsonBoolean "BoolF" tokens
+  print $ jsonBoolean "boolF" tokens
   print $ jsonString "string" tokens
   print $ jsonInt "number" tokens
   print $ jsonInt "minus" tokens

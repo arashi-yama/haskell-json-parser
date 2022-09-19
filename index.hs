@@ -26,6 +26,25 @@ back' f (x:xs)
   |null xs=""
   |otherwise=back' f xs
 
+--生の文字列のオブジェクトを一つ返す
+getAnObjectString :: [Char] -> [Char]
+getAnObjectString (x:xs)
+  |null xs=[x]
+  |x=='}'=[x]
+  |otherwise=do
+    let obj=getAnObjectString xs
+    let as=getAnObjectString (drop (length obj) xs)
+    x:if x=='{' then obj++as else getAnObjectString xs
+
+getAnArrayString :: [Char] -> [Char]
+getAnArrayString (x:xs)
+  |null xs=[x]
+  |x==']'=[x]
+  |otherwise=do
+    let arr=getAnArrayString xs
+    let as=getAnArrayString (drop (length arr) xs)
+    x:if x=='[' then arr++as else getAnArrayString xs
+
 --初めて余った閉じカッコ以降を返す
 tailObjectClose :: [(String, String)] -> [(String, String)]
 tailObjectClose (token:tokens)
@@ -65,7 +84,12 @@ isNumber :: Char -> Bool
 isNumber x=isDigit x || x=='-' ||x=='.'
 
 toTokenList :: String -> [(String, String)]
-toTokenList json=fst (objectToTokenList json [])
+toTokenList json= fst (objectToTokenList json [])
+
+rootJson :: String -> [(String, String)]
+rootJson json=fst $ objectToTokenList json []
+
+rootArrayjson json=fst $ arrayToTokenList json []
 
 jsonString :: String -> [(String, String)] -> String
 jsonString key (token:tokens)
@@ -116,129 +140,79 @@ arrayjsonArray index (token:tokens)
   |fst token=="ARRAY_OPEN"=getArrayArray index tokens
 
 getObjectString :: String -> [(String, String)] -> String
-getObjectString key (token:token':tokens)
-  |null tokens="UNSOLVED"
-  |otherwise=case fst token of
-    "KEY"
-      |snd token == key->do
-        let (valueType,value)=head tokens
-        if fst token' == "COLON" && valueType == "STRING" then value else "UNSOLVED"
-      |otherwise->getObjectString key (token':tokens)
-    "OBJECT_OPEN"->getObjectString key (tailObjectClose tokens)
-    "ARRAY_OPEN"->getObjectString key (tailArrayClose tokens)
-    _->getObjectString key (token':tokens)
+--オブジェクトはKEY,COLON,VALUE,COMMAの四周期で回る
+--                      KEY               COLON              VALUE              COMMA
+getObjectString key ((fstType,fstValue):(sndType,sndValue):(trdType,trdValue):(fothType,fothValue):tokens)
+  |fstType=="KEY"&&fstValue==key&&sndType=="COLON"&&trdType=="STRING"=trdValue
+  |otherwise=getObjectString key tokens
 
 getObjectNumber :: String -> [(String, String)] -> String
-getObjectNumber key (token:token':tokens)
-  |null tokens= "wawawa"
-  |otherwise=case fst token of
-    "KEY"
-      |snd token == key ->do
-        let (valueType,value)=head tokens
-        if fst token' == "COLON" && valueType == "NUMBER" then value else "wowowo"
-      |otherwise->getObjectNumber key (token':tokens)
-    "OBJECT_OPEN"->getObjectNumber key (tailObjectClose tokens)
-    "ARRAY_OPEN"->getObjectNumber key (tailArrayClose tokens)
-    _->getObjectNumber key (token':tokens)
+getObjectNumber key ((fstType,fstValue):(sndType,sndValue):(trdType,trdValue):(fothType,fothValue):tokens)
+  |fstType=="KEY"&&fstValue==key&&sndType=="COLON"&&trdType=="NUMBER"=trdValue
+  |otherwise=getObjectNumber key tokens
 
 getObjectBoolean :: String -> [(String, String)] -> Bool
-getObjectBoolean key (token:token':tokens)
-  |null tokens=False
-  |otherwise=case fst token of
-    "KEY"
-      |snd token == key ->do
-        let (valueType,value)=head tokens
-        if fst token' == "COLON" && valueType == "BOOLEAN" then value=="true" else False
-      |otherwise->getObjectBoolean key (token':tokens)
-    "OBJECT_OPEN"->getObjectBoolean key (tailObjectClose tokens)
-    "ARRAY_OPEN"->getObjectBoolean key (tailArrayClose tokens)
-    _->getObjectBoolean key (token':tokens)
+getObjectBoolean key ((fstType,fstValue):(sndType,sndValue):(trdType,trdValue):(fothType,fothValue):tokens)
+  |fstType=="KEY"&&fstValue==key&&sndType=="COLON"&&trdType=="BOOLEAN"=trdValue=="true"
+  |otherwise=getObjectBoolean key tokens
 
 getObject :: String -> [(String, String)] -> [(String, String)]
-getObject key (token:tokens)
-  |null tokens=[("","")]
-  |otherwise=case fst token of
-    "KEY"
-      |snd token == key ->
-        if fst (head tokens) == "COLON" && fst (tokens!!1) == "OBJECT_OPEN" then (tokens!!1):getAnObject (drop 2 tokens) else [("","")]
-      |otherwise->getObject key tokens
-    "OBJECT_OPEN"->getObject key $ tailObjectClose tokens
-    "ARRAY_OPEN"->getObject key $ tailArrayClose tokens
-    _->getObject key tokens
+getObject key ((fstType,fstValue):(sndType,sndValue):(trdType,trdValue):(fothType,fothValue):tokens)
+  |fstType=="KEY"&&fstValue==key&&sndType=="COLON"&&trdType=="OBJECT"=fst $ objectToTokenList trdValue []
+  |otherwise=getObject key tokens
+
 
 getObjectArray :: String -> [(String, String)] -> [(String, String)]
-getObjectArray key (token:tokens)
-  |null tokens=[("","")]
-  |otherwise=case fst token of
-    "KEY"
-      |snd token == key->
-        if fst (head tokens) == "COLON" && fst (tokens!!1) == "ARRAY_OPEN" then (tokens!!1):getAnArray (drop 2 tokens) else [("","")]
-      |otherwise->getObjectArray key tokens
-    "OBJECT_OPEN"->getObjectArray key $ tailObjectClose tokens
-    "ARRAY_OPEN"->getObjectArray key $ tailArrayClose tokens
-    _->getObjectArray key tokens
-
+getObjectArray key ((fstType,fstValue):(sndType,sndValue):(trdType,trdValue):(fothType,fothValue):tokens)
+  |fstType=="KEY"&&fstValue==key&&sndType=="COLON"&&trdType=="ARRAY"=fst $ arrayToTokenList trdValue []
+  |otherwise=getObjectArray key tokens
 
 getArrayString :: Int -> [(String, String)] -> String
-getArrayString index (token:tokens)
-  |null tokens="UNSOLVED"
-  |index<0="MINUS"
-  |index==0=snd token
-  |fst token=="OBJECT_OPEN"=getArrayString (index-1) $ tail $ tailObjectClose tokens
-  |fst token=="ARRAY_OPEN"=getArrayString (index-1) $ tail $ tailArrayClose tokens
-  |fst (head tokens)=="COMMA"=getArrayString (index-1) $ tail tokens
+--Arrayは VALUE COMMA の二周期
+--                      VALUE              COMMA
+getArrayString index ((fstType,fstValue):(sndType,sndValue):tokens)
+  |index==0&&fstType=="STRING"=fstValue
+  |index>0=getArrayString (index-1) tokens
+  
 
 getArrayNumber ::Int -> [(String, String)] -> String
-getArrayNumber index (token:tokens)
-  |index<0= "minus"
-  |index==0=snd token
-  |null tokens="null"
-  |fst token=="OBJECT_OPEN"=getArrayNumber (index-1) $ tail $ tailObjectClose tokens
-  |fst token=="ARRAY_OPEN"=getArrayNumber (index-1) $ tail $ tailArrayClose tokens
-  |fst (head tokens)=="COMMA"=getArrayNumber (index-1) $ tail tokens
-
+getArrayNumber index ((fstType,fstValue):(sndType,sndValue):tokens)
+  |index==0&&fstType=="NUMBER"=fstValue
+  |index>0=getArrayNumber (index-1) tokens
 
 getArrayBoolean :: Int -> [(String, String)] -> Bool
-getArrayBoolean index (token:tokens)
-  |null tokens=False
-  |index<0=False
-  |index==0=snd token=="true"
-  |fst token=="OBJECT_OPEN"=getArrayBoolean (index-1) $ tail $ tailObjectClose tokens
-  |fst token=="ARRAY_OPEN"=getArrayBoolean (index-1) $ tail $ tailArrayClose tokens
-  |fst (head tokens)=="COMMA"=getArrayBoolean (index-1) $ tail tokens
+getArrayBoolean index ((fstType,fstValue):(sndType,sndValue):tokens)
+  |index==0&&fstType=="BOOLEAN"=fstValue=="true"
+  |index>0=getArrayBoolean (index-1) tokens
 
 getArrayArray :: Int -> [(String, String)] -> [(String, String)]
-getArrayArray index (token:tokens)
-  |null tokens=[("","")]
-  |index<0=[("","")]
-  |index==0=token:getAnArray tokens
-  |fst token=="OBJECT_OPEN"=getArrayArray (index-1) $ tail $ tailObjectClose tokens
-  |fst token=="ARRAY_OPEN"=getArrayArray (index-1) $ tail $ tailArrayClose tokens
-  |fst (head tokens)=="COMMA"=getArrayArray (index-1) $ tail tokens
-
+getArrayArray index ((fstType,fstValue):(sndType,sndValue):tokens)
+  |index==0&&fstType=="ARRAY"=fst $ arrayToTokenList fstValue []
+  |index>0=getArrayArray (index-1) tokens
+  
 getArrayObject ::Int-> [(String, String)] -> [(String, String)]
-getArrayObject index (token:tokens)
-  |null tokens=[("","")]
-  |index<0=[("","")]
-  |index==0=token:getAnObject tokens
-  |fst token=="OBJECT_OPEN"=getArrayObject (index-1) $ tail $ tailObjectClose tokens
-  |fst token=="ARRAY_OPEN"=getArrayObject (index-1) $ tail $ tailArrayClose tokens
-  |fst (head tokens)=="COMMA"=getArrayObject (index-1) $ tail tokens
+getArrayObject index ((fstType,fstValue):(sndType,sndValue):tokens)
+  |index==0&&fstType=="OBJECT"=fst $ objectToTokenList fstValue []
+  |index>0=getArrayObject (index-1) tokens
+
 
 objectToTokenList :: String -> [(String,String)] -> ([(String,String)],String)
 objectToTokenList (x:xs) tokens
   |not (null tokens) && length (filter (\s->fst s == "OBJECT_OPEN") tokens )==length (filter (\s->fst s == "OBJECT_CLOSE") tokens)=(tokens,x:xs)
   |null xs=(tokens++[if x=='}' then ("OBJECT_CLOSE","}") else ("UNSOLVED",[x])],"")
   |x==' '||x=='\n'=objectToTokenList xs tokens
+  |null tokens&&x=='{'=objectToTokenList xs [("OBJECT_OPEN","{")]
   |x=='['=do
-    let (tkn,str)=arrayToTokenList (x:xs) []
-    if null str then (tokens++tkn,"")
-    else objectToTokenList str (tokens++tkn)
-  |x=='{'=objectToTokenList xs (tokens++[("OBJECT_OPEN","{")])
-  |x=='}'=objectToTokenList xs (tokens++[("OBJECT_CLOSE","}")])
+    let arr=getAnArrayString xs
+    let tails=drop (length arr) xs
+    if null tails then (tokens++[("ARRAY",x:arr)],"") else objectToTokenList tails $ tokens++[("ARRAY",x:arr)]
+  |x=='{'=do
+    let obj=getAnObjectString xs
+    let tails=drop (length obj) xs
+    if null tails then (tokens++[("OBJECT",x:obj)],"") else objectToTokenList tails $ tokens++[("OBJECT",x:obj)]
   |x==':'=objectToTokenList xs (tokens++[("COLON",":")])
   |x==','=objectToTokenList xs (tokens++[("COMMA",",")])
-  |x=='"'= if fst (last tokens)=="OBJECT_OPEN"||fst (last tokens)=="COMMA"
+  |x=='"'= if fst (last tokens)=="COMMA"||fst (last tokens)=="OBJECT_OPEN"
     then objectToTokenList (back (=='"') xs) (tokens++[("KEY",many (/='"') xs)])
     else if fst (last tokens)=="COLON" then objectToTokenList (back (=='"') xs) (tokens++[("STRING",many (/='"') xs)])
     else objectToTokenList xs (tokens++[("UNSOLVED",[x])])
@@ -254,12 +228,15 @@ arrayToTokenList (x:xs) tokens
   |not (null tokens)  && length (filter (\s->fst s == "ARRAY_OPEN") tokens )==length (filter (\s->fst s == "ARRAY_CLOSE") tokens)=(tokens,x:xs)
   |null xs=(tokens++[if x==']' then ("ARRAY_CLOSE","]") else ("UNSOLVED",[x])],"")
   |x==' '||x=='\n'=arrayToTokenList xs tokens
+  |null tokens&&x=='['=arrayToTokenList xs (tokens++[("ARRAY_OPEN","[")])
+  |x=='['=do
+    let arr=getAnArrayString xs
+    let tails=drop (length arr) xs
+    if null tails then (tokens++[("ARRAY",x:arr)],"") else arrayToTokenList tails $ tokens++[("ARRAY",x:arr)]
   |x=='{'=do
-    let (tkn,str)=objectToTokenList (x:xs) []
-    if null str then (tokens,"")
-    else arrayToTokenList str (tokens++tkn)
-  |x=='['=arrayToTokenList xs (tokens++[("ARRAY_OPEN","[")])
-  |x==']'=arrayToTokenList xs (tokens++[("ARRAY_CLOSE","]")])
+    let obj=getAnObjectString xs
+    let tails=drop (length obj) xs
+    if null tails then (tokens++[("OBJECT",x:obj)],"") else arrayToTokenList tails $ tokens++[("OBJECT",x:obj)]
   |x==','=arrayToTokenList xs (tokens++[("COMMA",",")])
   |x=='"'=arrayToTokenList (back (=='"') xs) (tokens++[("STRING",many (/='"') xs)])
   |isNumber x=arrayToTokenList (back' (not . isNumber) xs) (tokens++[("NUMBER",x:many isNumber xs)])
