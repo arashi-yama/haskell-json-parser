@@ -4,7 +4,7 @@ import Data.Char (isDigit, isLetter)
 import Data.Either ()
 
 tokenToString :: [(String, String)] -> String
-tokenToString=concatMap (\(tkn,value)->if tkn=="KEY"||tkn=="STRING" then "\""++value++"\"" else value)
+tokenToString=concatMap (\(typ,value)->if typ=="KEY"||typ=="STRING" then "\""++value++"\"" else value)
 
 --合致している間返す
 many :: (Char -> Bool) -> String -> String
@@ -84,10 +84,10 @@ isNumber :: Char -> Bool
 isNumber x=isDigit x || x=='-' ||x=='.'
 
 rootJson :: String -> Either String [(String, String)]
-rootJson json= objectToTokenList json []
+rootJson json= objectToTokenList json [] ""
 
 rootArrayjson :: String -> Either String [(String, String)]
-rootArrayjson json=arrayToTokenList json []
+rootArrayjson json=arrayToTokenList json [] ""
 
 jsonString :: String -> [(String, String)] -> Either String String
 jsonString key (token:tokens)
@@ -190,7 +190,7 @@ getObject _ [("OBJECT_CLOSE","}")]=Left "Empty JSON"
 getObject key ((fstType,fstValue):(sndType,sndValue):(trdType,trdValue):(fothType,fothValue):tokens)
   |not $ fstType=="KEY"&&sndType=="COLON"&&(fothType=="COMMA"||fothType=="OBJECT_CLOSE")=Left "Syntax Error"
   |fstValue==key=case trdType of
-    "OBJECT"->objectToTokenList trdValue []
+    "OBJECT"->objectToTokenList trdValue [] ""
     "NULL"->Left "null"
     _->Left $ "Couldn't match type. Exepted type:OBJECT. ActualType:"++trdType
   |fothType=="OBJECT_CLOSE"=Left "No such a key"
@@ -202,7 +202,7 @@ getObjectArray _ [("OBJECT_CLOSE","}")]=Left "Empty JSON"
 getObjectArray key ((fstType,fstValue):(sndType,sndValue):(trdType,trdValue):(fothType,fothValue):tokens)
   |not $ fstType=="KEY"&&sndType=="COLON"&&(fothType=="COMMA"||fothType=="OBJECT_CLOSE")=Left "Syntax Error"
   |fstValue==key=case trdType of
-    "ARRAY"->arrayToTokenList trdValue []
+    "ARRAY"->arrayToTokenList trdValue [] ""
     "NULL"->Left "null"
     _->Left $ "Couldn't match type. Exepted type:ARRAY. ActualType:"++trdType
   |fothType=="OBJECT_CLOSE"=Left "No such a key"
@@ -251,7 +251,7 @@ getArrayArray _ [("ARRAY_CLOSE","]")]=Left "Empty Array"
 getArrayArray index ((fstType,fstValue):(sndType,sndValue):tokens)
   |sndType/="COMMA"&&sndType/="ARRAY_CLOSE"=Left "Syntax Error"
   |index==0=case fstType of
-    "ARRAY"->arrayToTokenList fstValue []
+    "ARRAY"->arrayToTokenList fstValue [] ""
     "NULL"->Left "null"
     _->Left $ "Couldn't match type. Exepted type:ARRAY. ActualType:"++fstType
   |sndType=="ARRAY_CLOSE"=Left "Index is too learge"
@@ -263,7 +263,7 @@ getArrayObject _ [("ARRAY_CLOSE","]")]=Left "Empty Array"
 getArrayObject index ((fstType,fstValue):(sndType,sndValue):tokens)
   |sndType/="COMMA"&&sndType/="ARRAY_CLOSE"=Left "Syntax Error"
   |index==0=case fstType of
-    "OBJECT"->objectToTokenList fstValue []
+    "OBJECT"->objectToTokenList fstValue [] ""
     "NULL"->Left "null"
     _->Left $ "Couldn't match type. Exepted type:OBJECT. ActualType:"++fstType
   |sndType=="ARRAY_CLOSE"=Left "Index is too learge"
@@ -272,52 +272,51 @@ getArrayObject index ((fstType,fstValue):(sndType,sndValue):tokens)
 
 
 
-objectToTokenList :: String -> [(String,String)] ->Either String [(String,String)]
-objectToTokenList "" _=Left "Empty String"
-objectToTokenList (x:xs) tokens
-  |null xs=if x=='}' then Right (tokens++[("OBJECT_CLOSE","}")]) else Left $ "Unexpected JSON end by "++[x]
-  |x==' '||x=='\n'=objectToTokenList xs tokens
-  |null tokens=if x=='{' then objectToTokenList xs [("OBJECT_OPEN","{")] else Left $ "Object must start with '{' but start with "++[x]
+objectToTokenList :: String -> [(String,String)] -> String ->Either String [(String,String)]
+objectToTokenList "" _ _=Left "Empty String"
+--lastの参照はO(N).何度か last tokens するよりは引数に追加した
+objectToTokenList json@(x:xs) tokens lastTokenType
+  |null xs=if x=='}'&&not (null tokens) then Right (tokens++[("OBJECT_CLOSE","}")]) else Left $ "Unexpected JSON end by "++[x]
+  |x==' '||x=='\n'=objectToTokenList xs tokens lastTokenType
+  |null tokens=if x=='{' then objectToTokenList xs [("OBJECT_OPEN","{")] "OBJECT_OPEN" else Left $ "Object must start with '{' but start with "++[x]
+  |x==':'=if lastTokenType=="KEY" then objectToTokenList xs (tokens++[("COLON",":")]) "COLON" else Left "Unexpected colon"
+  |x==','=if lastTokenType `elem` ["STRING","NUMBER","BOOLEAN","NULL","OBJECT","ARRAY"] then objectToTokenList xs (tokens++[("COMMA",",")]) "COMMA" else Left "Unexpected comma"
+  |x=='"'&&(lastTokenType=="COMMA"||lastTokenType=="OBJECT_OPEN")=objectToTokenList (back (=='"') xs) (tokens++[("KEY",many (/='"') xs)]) "KEY"
   |x=='['=do
     let arr=getAnArrayString xs
     let tails=drop (length arr) xs
-    if null tails then Right (tokens++[("ARRAY",x:arr)]) else objectToTokenList tails $ tokens++[("ARRAY",x:arr)]
+    if null tails then Left "End with Array" else objectToTokenList tails (tokens++[("ARRAY",x:arr)]) "ARRAY"
   |x=='{'=do
     let obj=getAnObjectString xs
     let tails=drop (length obj) xs
-    if null tails then Right (tokens++[("OBJECT",x:obj)]) else objectToTokenList tails $ tokens++[("OBJECT",x:obj)]
-  |x==':'=objectToTokenList xs (tokens++[("COLON",":")])
-  |x==','=objectToTokenList xs (tokens++[("COMMA",",")])
-  |x=='"'= if fst (last tokens)=="COMMA"||fst (last tokens)=="OBJECT_OPEN"
-    then objectToTokenList (back (=='"') xs) (tokens++[("KEY",many (/='"') xs)])
-    else if fst (last tokens)=="COLON" then objectToTokenList (back (=='"') xs) (tokens++[("STRING",many (/='"') xs)])
+    if null tails then Left "End with Object" else objectToTokenList tails (tokens++[("OBJECT",x:obj)]) "OBJECT"
+  |x=='"'=if lastTokenType=="COLON" then objectToTokenList (back (=='"') xs) (tokens++[("STRING",many (/='"') xs)]) "STRING"
     else Left "Unexpected '\"'"
-  |fst (last tokens)=="COLON"= if isNumber x then objectToTokenList (back' (not . isNumber) xs) (tokens++[("NUMBER",x:many isNumber xs)])
-    else if take 4 (x:xs) =="true" then objectToTokenList (drop 3 xs) (tokens++[("BOOLEAN","true")])
-    else if take 5 (x:xs) =="false" then objectToTokenList (drop 4 xs) (tokens++[("BOOLEAN","false")])
-    else if take 4 (x:xs) =="null" then objectToTokenList (drop 3 xs) (tokens++[("NULL","null")])
-    else Left $ "Unexpected JSON value:"++[x]
+  |isNumber x=objectToTokenList (back' (not . isNumber) xs) (tokens++[("NUMBER",x:many isNumber xs)]) "NUMBER"
+  |take 4 json=="true"=objectToTokenList (drop 3 xs) (tokens++[("BOOLEAN","true")]) "BOOLEAN"
+  |take 5 json=="false"=objectToTokenList (drop 4 xs) (tokens++[("BOOLEAN","false")]) "BOOLEAN"
+  |take 4 json=="null"= objectToTokenList (drop 3 xs) (tokens++[("NULL","null")]) "NULL"
   |otherwise=Left $ "Unsolved token:"++[x]
 
 
-arrayToTokenList :: String -> [(String, String)] -> Either String [(String, String)]
-arrayToTokenList "" _=Left "Empty String"
-arrayToTokenList (x:xs) tokens
-  |null xs=if x==']' then Right $ tokens++[("ARRAY_CLOSE","]")] else Left $ "Unexpected JSON end by "++[x]
-  |x==' '||x=='\n'=arrayToTokenList xs tokens
-  |null tokens=if x=='[' then arrayToTokenList xs (tokens++[("ARRAY_OPEN","[")]) else Left $ "Array must start with '[' but start with "++[x]
+arrayToTokenList :: String -> [(String, String)] ->String -> Either String [(String, String)]
+arrayToTokenList "" _ _=Left "Empty String"
+arrayToTokenList (x:xs) tokens lastTokenType
+  |null xs=if x==']'&&not (null tokens) then Right $ tokens++[("ARRAY_CLOSE","]")] else Left $ "Unexpected JSON end by "++[x]
+  |x==' '||x=='\n'=arrayToTokenList xs tokens lastTokenType
+  |null tokens=if x=='[' then arrayToTokenList xs (tokens++[("ARRAY_OPEN","[")]) "ARRAY_OPEN" else Left $ "Array must start with '[' but start with "++[x]
+  |x==','=if lastTokenType `elem` ["STRING","NUMBER","BOOLEAN","NULL","OBJECT","ARRAY"] then arrayToTokenList xs (tokens++[("COMMA",",")]) "COMMA" else Left $ "Unexpected comma"
   |x=='['=do
     let arr=getAnArrayString xs
     let tails=drop (length arr) xs
-    if null tails then Right $ tokens++[("ARRAY",x:arr)] else arrayToTokenList tails $ tokens++[("ARRAY",x:arr)]
+    if null tails then Left "End with Array" else arrayToTokenList tails (tokens++[("ARRAY",x:arr)]) "ARRAY"
   |x=='{'=do
     let obj=getAnObjectString xs
     let tails=drop (length obj) xs
-    if null tails then Right $ tokens++[("OBJECT",x:obj)] else arrayToTokenList tails $ tokens++[("OBJECT",x:obj)]
-  |x==','=arrayToTokenList xs (tokens++[("COMMA",",")])
-  |x=='"'=arrayToTokenList (back (=='"') xs) (tokens++[("STRING",many (/='"') xs)])
-  |isNumber x=arrayToTokenList (back' (not . isNumber) xs) (tokens++[("NUMBER",x:many isNumber xs)])
-  |take 4 (x:xs) =="true"=arrayToTokenList (drop 3 xs) (tokens++[("BOOLEAN","true")])
-  |take 5 (x:xs) =="false"=arrayToTokenList  (drop 4 xs) (tokens++[("BOOLEAN","false")])
-  |take 4 (x:xs) =="null"=arrayToTokenList (drop 3 xs) (tokens++[("NULL","null")])
+    if null tails then Left "End with Array" else arrayToTokenList tails (tokens++[("OBJECT",x:obj)]) "OBJECT"
+  |x=='"'=arrayToTokenList (back (=='"') xs) (tokens++[("STRING",many (/='"') xs)]) "STRING"
+  |isNumber x=arrayToTokenList (back' (not . isNumber) xs) (tokens++[("NUMBER",x:many isNumber xs)]) "NUMBER"
+  |take 4 (x:xs) =="true"=arrayToTokenList (drop 3 xs) (tokens++[("BOOLEAN","true")]) "BOOLEAN"
+  |take 5 (x:xs) =="false"=arrayToTokenList  (drop 4 xs) (tokens++[("BOOLEAN","false")]) "BOOLEAN"
+  |take 4 (x:xs) =="null"=arrayToTokenList (drop 3 xs) (tokens++[("NULL","null")]) "NULL"
   |otherwise=Left $ "Unsolved token:"++[x]
