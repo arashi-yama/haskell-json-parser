@@ -1,14 +1,14 @@
 {
   "name":"haskell-json-parser",
   "version":0,
+  "work history":null,
   "authors":["arashiyama"],
   "primes":[2,3,5,7,9,11,13,17,19],
-  "introduceMyself":{
+  "introduce myself":{
     "male":true,
     "famale":false,
     "from":"Japan",
     "most like number":3.14,
-    "date":"2022-09-19T10:38:00Z",
     "programing languages":[{
         "name":"JavaScript",
         "skill":"noob"

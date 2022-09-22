@@ -1,19 +1,19 @@
 # JSONパーサー
-
 ## 使い方
 1.トークン列化する  
 ```haskell
-let tokens=toTokenList "{\"hello\":\"world\"}"
+let root=rootJson "{\"hello\":\"world\"}"
+let array=rootArrayjson "[1,2,3]"
 ```
 
 2.型に合わせて関数に与える  
-オブジェクトから取得する関数は`json[Type] key tokens`という形になっています。  
-配列から取得する関数は`arrayjson[Type] index tokens`という形になっています。  
-
-オブジェクトから文字列を取得するには  
+JSONオブジェクトから取得する関数は`json[Type] key tokens`という形になっています。  
+JSON配列から取得する関数は`arrayjson[Type] index tokens`という形になっています。  
+JSONから値を取得するには  
 ```haskell
-jsonString "hello" tokens
+root>>=jsonString "hello" --world
+array>>=arrayjsonInt 0 --1
 ```
 のようにします。  
 
-tokenToString関数でトークン列を元に戻せます。改行、空白は失われます。  
+tokenToString関数でトークン列を元に戻せます。パースした箇所の改行、空白は失われます。  
