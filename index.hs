@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 module Index where
 import Data.Char (isDigit, isLetter)
 import Data.Either ()
@@ -8,12 +7,14 @@ tokenToString=concatMap (\(typ,value)->if typ=="KEY"||typ=="STRING" then "\""++v
 
 --合致している間返す
 many :: (Char -> Bool) -> String -> String
+many _ []=""
 many f (x:xs)
   |f x=if null xs then [x] else x:many f xs
   |otherwise=""
 
 --初めて合致した物以降を返す(合致したものは含まない)
 back :: (Char -> Bool) -> String -> String
+back _ []=""
 back f (x:xs)
   |f x=xs
   |null xs=""
@@ -21,6 +22,7 @@ back f (x:xs)
 
 --初めて合致した物以降を返す(合致したものを含む)
 back' :: (Char -> Bool) -> String -> String
+back' _ []=""
 back' f (x:xs)
   |f x=x:xs
   |null xs=""
@@ -28,6 +30,7 @@ back' f (x:xs)
 
 --生の文字列のオブジェクトを一つ返す
 getAnObjectString :: String -> String
+getAnObjectString []=""
 getAnObjectString (x:xs)
   |null xs=[x]
   |x=='}'=[x]
@@ -37,6 +40,7 @@ getAnObjectString (x:xs)
     x:if x=='{' then obj++as else getAnObjectString xs
 
 getAnArrayString :: String -> String
+getAnArrayString []=""
 getAnArrayString (x:xs)
   |null xs=[x]
   |x==']'=[x]
@@ -47,6 +51,7 @@ getAnArrayString (x:xs)
 
 --初めて余った閉じカッコ以降を返す
 tailObjectClose :: [(String, String)] -> [(String, String)]
+tailObjectClose []=[]
 tailObjectClose (token:tokens)
   |null tokens=[]
   |fst token=="OBJECT_OPEN"=tailObjectClose $ tailObjectClose tokens
@@ -54,6 +59,7 @@ tailObjectClose (token:tokens)
   |otherwise=tailObjectClose tokens
 
 tailArrayClose :: [(String, String)] -> [(String, String)]
+tailArrayClose []=[]
 tailArrayClose (token:tokens)
   |null tokens=[]
   |fst token=="ARRAY_OPEN"=tailArrayClose $ tailArrayClose tokens
@@ -62,6 +68,7 @@ tailArrayClose (token:tokens)
 
 --オブジェクトを一つ返す
 getAnObject :: [(String,String)] -> [(String,String)]
+getAnObject []=[]
 getAnObject (token:tokens)
   |null tokens=[token]
   |fst token=="OBJECT_CLOSE"=[token]
@@ -71,6 +78,7 @@ getAnObject (token:tokens)
     token:if fst token=="OBJECT_OPEN" then obj++as else getAnObject tokens
 
 getAnArray :: [(String,String)] -> [(String,String)]
+getAnArray []=[]
 getAnArray (token:tokens)
   |null tokens=[token]
   |fst token=="ARRAY_CLOSE"=[token]
@@ -90,70 +98,85 @@ rootArrayjson :: String -> Either String [(String, String)]
 rootArrayjson json=arrayToTokenList json [] ""
 
 jsonString :: String -> [(String, String)] -> Either String String
+jsonString _ []=Left "Empty JSON input"
 jsonString key (token:tokens)
   |fst token=="OBJECT_OPEN" =getObjectString key tokens
   |otherwise=Left "Must start with '{'"
 
 jsonInt :: String -> [(String, String)] -> Either String Int
+jsonInt _ []=Left "Empty JSON input"
 jsonInt key (token:tokens)
   |fst token=="OBJECT_OPEN" = read <$> getObjectNumber key tokens
   |otherwise=Left "Must start with '{'"
 
 jsonDouble :: String -> [(String, String)] -> Either String Double
+jsonDouble _ []=Left "Empty JSON input"
 jsonDouble key (token:tokens)
   |fst token=="OBJECT_OPEN" = read <$> getObjectNumber key tokens
   |otherwise=Left "Must start with '{'"
 
 jsonBoolean :: String -> [(String, String)] -> Either String Bool
+jsonBoolean _ []=Left "Empty JSON input"
 jsonBoolean key (token:tokens)
   |fst token=="OBJECT_OPEN" = getObjectBoolean key tokens
   |otherwise=Left "Must start with '{'"
 
 jsonObject :: String -> [(String, String)] -> Either String [(String, String)]
+jsonObject _ []=Left "Empty JSON input"
 jsonObject key (token:tokens)
   |fst token=="OBJECT_OPEN"=getObject key tokens
   |otherwise=Left "Must start with '{'"
 
 
 jsonArray :: String -> [(String, String)] -> Either String [(String, String)]
+jsonArray _ []=Left "Empty JSON input"
 jsonArray key (token:tokens)
   |fst token=="OBJECT_OPEN"=getObjectArray key tokens
   |otherwise=Left "Must start with '{'"
 
 
 arrayjsonString :: Int -> [(String, String)] ->Either String String
+arrayjsonString _ []=Left "Empty JSON input"
 arrayjsonString index (token:tokens)
   |fst token=="ARRAY_OPEN"=getArrayString index tokens
   |otherwise=Left "Must start with '['"
 
 arrayjsonInt :: Int -> [(String, String)] ->Either String Int
+arrayjsonInt _ []=Left "Empty JSON input"
 arrayjsonInt index (token:tokens)
   |fst token=="ARRAY_OPEN"=read <$> getArrayNumber index tokens
   |otherwise=Left "Must start with '['"
 
 
 arrayjsonDouble :: Int -> [(String, String)] ->Either String Double
+arrayjsonDouble _ []=Left "Empty JSON input"
 arrayjsonDouble index (token:tokens)
   |fst token=="ARRAY_OPEN"=read <$> getArrayNumber index tokens
   |otherwise=Left "Must start with '['"
 
 arrayjsonBoolean :: Int -> [(String, String)] ->Either String Bool
+arrayjsonBoolean _ []=Left "Empty JSON input"
 arrayjsonBoolean index (token:tokens)
   |fst token=="ARRAY_OPEN"=getArrayBoolean index tokens
   |otherwise=Left "Must start with '['"
 
 arrayjsonObject :: Int -> [(String, String)] ->Either String [(String, String)]
+arrayjsonObject _ []=Left "Empty JSON input"
 arrayjsonObject index (token:tokens)
   |fst token=="ARRAY_OPEN"=getArrayObject index tokens
   |otherwise=Left "Must start with '['"
 
 arrayjsonArray :: Int -> [(String, String)] ->Either String [(String, String)]
+arrayjsonArray _ []=Left "Empty JSON input"
 arrayjsonArray index (token:tokens)
   |fst token=="ARRAY_OPEN"=getArrayArray index tokens
   |otherwise=Left "Must start with '['"
 
 getObjectString :: String -> [(String, String)] -> Either String String
-getObjectString _ [("OBJECT_CLOSE","}")]=Left "Empty JSON"
+getObjectString _ []=Left "String length is not enought"
+getObjectString _ [_]=Left "String length is not enought"
+getObjectString _ [_,_]=Left "String length is not enought"
+getObjectString _ [_,_,_]=Left "String length is not enought"
 getObjectString key ((fstType,fstValue):(sndType,sndValue):(trdType,trdValue):(fothType,fothValue):tokens)
   |not $ fstType=="KEY"&&sndType=="COLON"&&(fothType=="COMMA"||fothType=="OBJECT_CLOSE")=Left "Syntax Error"
   |fstValue==key=case trdType of
@@ -164,7 +187,10 @@ getObjectString key ((fstType,fstValue):(sndType,sndValue):(trdType,trdValue):(f
   |otherwise=getObjectString key tokens
 
 getObjectNumber :: String -> [(String, String)] ->  Either String String
-getObjectNumber _ [("OBJECT_CLOSE","}")]=Left "Empty JSON"
+getObjectNumber _ []=Left "String length is not enought"
+getObjectNumber _ [_]=Left "String length is not enought"
+getObjectNumber _ [_,_]=Left "String length is not enought"
+getObjectNumber _ [_,_,_]=Left "String length is not enought"
 getObjectNumber key ((fstType,fstValue):(sndType,sndValue):(trdType,trdValue):(fothType,fothValue):tokens)
   |not $ fstType=="KEY"&&sndType=="COLON"&&(fothType=="COMMA"||fothType=="OBJECT_CLOSE")=Left "Syntax Error"
   |fstValue==key=case trdType of
@@ -175,7 +201,10 @@ getObjectNumber key ((fstType,fstValue):(sndType,sndValue):(trdType,trdValue):(f
   |otherwise=getObjectNumber key tokens
 
 getObjectBoolean :: String -> [(String, String)] -> Either String Bool
-getObjectBoolean _ [("OBJECT_CLOSE","}")]=Left "Empty JSON"
+getObjectBoolean _ []=Left "String length is not enought"
+getObjectBoolean _ [_]=Left "String length is not enought"
+getObjectBoolean _ [_,_]=Left "String length is not enought"
+getObjectBoolean _ [_,_,_]=Left "String length is not enought"
 getObjectBoolean key ((fstType,fstValue):(sndType,sndValue):(trdType,trdValue):(fothType,fothValue):tokens)
   |not $ fstType=="KEY"&&sndType=="COLON"&&(fothType=="COMMA"||fothType=="OBJECT_CLOSE")=Left "Syntax Error"
   |fstValue==key=case trdType of
@@ -186,7 +215,10 @@ getObjectBoolean key ((fstType,fstValue):(sndType,sndValue):(trdType,trdValue):(
   |otherwise=getObjectBoolean key tokens
 
 getObject :: String -> [(String, String)] -> Either String [(String, String)]
-getObject _ [("OBJECT_CLOSE","}")]=Left "Empty JSON"
+getObject _ []=Left "String length is not enought"
+getObject _ [_]=Left "String length is not enought"
+getObject _ [_,_]=Left "String length is not enought"
+getObject _ [_,_,_]=Left "String length is not enought"
 getObject key ((fstType,fstValue):(sndType,sndValue):(trdType,trdValue):(fothType,fothValue):tokens)
   |not $ fstType=="KEY"&&sndType=="COLON"&&(fothType=="COMMA"||fothType=="OBJECT_CLOSE")=Left "Syntax Error"
   |fstValue==key=case trdType of
@@ -198,7 +230,10 @@ getObject key ((fstType,fstValue):(sndType,sndValue):(trdType,trdValue):(fothTyp
 
 
 getObjectArray :: String -> [(String, String)] ->  Either String [(String, String)]
-getObjectArray _ [("OBJECT_CLOSE","}")]=Left "Empty JSON"
+getObjectArray _ []=Left "String length is not enought"
+getObjectArray _ [_]=Left "String length is not enought"
+getObjectArray _ [_,_]=Left "String length is not enought"
+getObjectArray _ [_,_,_]=Left "String length is not enought"
 getObjectArray key ((fstType,fstValue):(sndType,sndValue):(trdType,trdValue):(fothType,fothValue):tokens)
   |not $ fstType=="KEY"&&sndType=="COLON"&&(fothType=="COMMA"||fothType=="OBJECT_CLOSE")=Left "Syntax Error"
   |fstValue==key=case trdType of
@@ -210,7 +245,8 @@ getObjectArray key ((fstType,fstValue):(sndType,sndValue):(trdType,trdValue):(fo
   |otherwise=getObjectArray key tokens
 
 getArrayString :: Int -> [(String, String)] -> Either String String
-getArrayString _ [("ARRAY_CLOSE","]")]=Left "Empty Array"
+getArrayString _ []=Left "String length is not enought"
+getArrayString _ [_]=Left "String length is not enought"
 getArrayString index ((fstType,fstValue):(sndType,sndValue):tokens)
   |sndType/="COMMA"&&sndType/="ARRAY_CLOSE"=Left "Syntax Error"
   |index==0=case fstType of
@@ -223,7 +259,8 @@ getArrayString index ((fstType,fstValue):(sndType,sndValue):tokens)
 
 
 getArrayNumber ::Int -> [(String, String)] -> Either String String
-getArrayNumber _ [("ARRAY_CLOSE","]")]=Left "Empty Array"
+getArrayNumber _ []=Left "String length is not enought"
+getArrayNumber _ [_]=Left "String length is not enought"
 getArrayNumber index ((fstType,fstValue):(sndType,sndValue):tokens)
   |sndType/="COMMA"&&sndType/="ARRAY_CLOSE"=Left "Syntax Error"
   |index==0=case fstType of
@@ -235,7 +272,8 @@ getArrayNumber index ((fstType,fstValue):(sndType,sndValue):tokens)
   |otherwise=Left "Uncaught parse failure"
 
 getArrayBoolean :: Int -> [(String, String)] -> Either String Bool
-getArrayBoolean _ [("ARRAY_CLOSE","]")]=Left "Empty Array"
+getArrayBoolean _ []=Left "String length is not enought"
+getArrayBoolean _ [_]=Left "String length is not enought"
 getArrayBoolean index ((fstType,fstValue):(sndType,sndValue):tokens)
   |sndType/="COMMA"&&sndType/="ARRAY_CLOSE"=Left "Syntax Error"
   |index==0=case fstType of
@@ -247,7 +285,8 @@ getArrayBoolean index ((fstType,fstValue):(sndType,sndValue):tokens)
   |otherwise=Left "Uncaught parse failure"
 
 getArrayArray :: Int -> [(String, String)] -> Either String[(String, String)]
-getArrayArray _ [("ARRAY_CLOSE","]")]=Left "Empty Array"
+getArrayArray _ []=Left "String length is not enought"
+getArrayArray _ [_]=Left "String length is not enought"
 getArrayArray index ((fstType,fstValue):(sndType,sndValue):tokens)
   |sndType/="COMMA"&&sndType/="ARRAY_CLOSE"=Left "Syntax Error"
   |index==0=case fstType of
@@ -259,7 +298,8 @@ getArrayArray index ((fstType,fstValue):(sndType,sndValue):tokens)
   |otherwise=Left "Uncaught parse failure"
 
 getArrayObject ::Int-> [(String, String)] -> Either String [(String, String)]
-getArrayObject _ [("ARRAY_CLOSE","]")]=Left "Empty Array"
+getArrayObject _ []=Left "String length is not enought"
+getArrayObject _ [_]=Left "String length is not enought"
 getArrayObject index ((fstType,fstValue):(sndType,sndValue):tokens)
   |sndType/="COMMA"&&sndType/="ARRAY_CLOSE"=Left "Syntax Error"
   |index==0=case fstType of
@@ -305,7 +345,7 @@ arrayToTokenList (x:xs) tokens lastTokenType
   |null xs=if x==']'&&not (null tokens) then Right $ tokens++[("ARRAY_CLOSE","]")] else Left $ "Unexpected JSON end by "++[x]
   |x==' '||x=='\n'=arrayToTokenList xs tokens lastTokenType
   |null tokens=if x=='[' then arrayToTokenList xs (tokens++[("ARRAY_OPEN","[")]) "ARRAY_OPEN" else Left $ "Array must start with '[' but start with "++[x]
-  |x==','=if lastTokenType `elem` ["STRING","NUMBER","BOOLEAN","NULL","OBJECT","ARRAY"] then arrayToTokenList xs (tokens++[("COMMA",",")]) "COMMA" else Left $ "Unexpected comma"
+  |x==','=if lastTokenType `elem` ["STRING","NUMBER","BOOLEAN","NULL","OBJECT","ARRAY"] then arrayToTokenList xs (tokens++[("COMMA",",")]) "COMMA" else Left "Unexpected comma"
   |x=='['=do
     let arr=getAnArrayString xs
     let tails=drop (length arr) xs
