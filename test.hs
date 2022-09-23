@@ -1,5 +1,5 @@
 import Index (jsonString,jsonInt,jsonDouble,jsonBoolean,jsonArray,jsonObject,arrayjsonInt,arrayjsonDouble,arrayjsonString,arrayjsonArray,arrayjsonObject,tokenToString,arrayjsonBoolean, getObject, rootJson, rootArrayjson)
-import Data.Either (fromRight, fromLeft)
+import Data.Either ()
 
 arrayTest :: IO ()
 arrayTest=do
@@ -16,6 +16,7 @@ arrayTest=do
   let at=array>>=arrayjsonInt 1
   let ath=array>>=arrayjsonInt 2
   let nul=root>>=arrayjsonString 7
+  print $ tokenToString <$> root
   print zero 
   print one
   print two
@@ -70,6 +71,9 @@ illed=do
   print $ rootJson "{\"key\":,\"a\"}"
   print $ rootJson "{\"key\":oh}"
   print $ rootJson "{\"key\":{}"
+  print $ rootJson "{\"key\":truetrue}"
+  print $ rootJson "{\"key\":falseoa}"
+  print $ rootJson "{\"key\":nullnull}"
 
   putStrLn ""
 
@@ -82,6 +86,13 @@ illed=do
   print $ rootArrayjson "[oh]"
   print $ rootArrayjson "[[]"
   print $ rootArrayjson "[{]}"
+  print $ rootArrayjson "[truetrue]"
+  print $ rootArrayjson "[falsefalse]"
+  print $ rootArrayjson "[truefalse]"
+  print $ rootArrayjson "[-1]"
+  print $ rootArrayjson "[-1-1-1-1-1-1]"
+  print $ rootArrayjson "[....]"
+
   
 
   print 1

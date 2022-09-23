@@ -87,9 +87,16 @@ getAnArray (token:tokens)
     let as=getAnArray (drop (length arr) tokens)
     token:if fst token=="ARRAY_OPEN" then arr++as else getAnArray tokens
 
+getNumber :: String -> String
+getNumber []=""
+getNumber xs
+  |head xs=='-'='-':getNumber (tail xs)
+  |otherwise=do
+    let int=many isDigit xs
+    let intLength=length int
+    let isDecimal=(length xs > intLength) && (xs !! intLength == '.')
+    if isDecimal then int++"."++many isDigit (drop (intLength+1) xs) else int
 
-isNumber :: Char -> Bool
-isNumber x=isDigit x || x=='-' ||x=='.'
 
 rootJson :: String -> Either String [(String, String)]
 rootJson json= objectToTokenList json [] ""
@@ -322,6 +329,7 @@ objectToTokenList json@(x:xs) tokens lastTokenType
   |x==':'=if lastTokenType=="KEY" then objectToTokenList xs (tokens++[("COLON",":")]) "COLON" else Left "Unexpected colon"
   |x==','=if lastTokenType `elem` ["STRING","NUMBER","BOOLEAN","NULL","OBJECT","ARRAY"] then objectToTokenList xs (tokens++[("COMMA",",")]) "COMMA" else Left "Unexpected comma"
   |x=='"'&&(lastTokenType=="COMMA"||lastTokenType=="OBJECT_OPEN")=objectToTokenList (back (=='"') xs) (tokens++[("KEY",many (/='"') xs)]) "KEY"
+  |lastTokenType/="COLON"=Left $ "Unexpected token:"++[x]
   |x=='['=do
     let arr=getAnArrayString xs
     let tails=drop (length arr) xs
@@ -330,9 +338,10 @@ objectToTokenList json@(x:xs) tokens lastTokenType
     let obj=getAnObjectString xs
     let tails=drop (length obj) xs
     if null tails then Left "End with Object" else objectToTokenList tails (tokens++[("OBJECT",x:obj)]) "OBJECT"
-  |x=='"'=if lastTokenType=="COLON" then objectToTokenList (back (=='"') xs) (tokens++[("STRING",many (/='"') xs)]) "STRING"
-    else Left "Unexpected '\"'"
-  |isNumber x=objectToTokenList (back' (not . isNumber) xs) (tokens++[("NUMBER",x:many isNumber xs)]) "NUMBER"
+  |x=='"'=objectToTokenList (back (=='"') xs) (tokens++[("STRING",many (/='"') xs)]) "STRING"
+  |isDigit x||x=='-'=do
+    let num=getNumber json
+    objectToTokenList (drop (length num) json) (tokens++[("NUMBER",num)]) "NUMBER"
   |take 4 json=="true"=objectToTokenList (drop 3 xs) (tokens++[("BOOLEAN","true")]) "BOOLEAN"
   |take 5 json=="false"=objectToTokenList (drop 4 xs) (tokens++[("BOOLEAN","false")]) "BOOLEAN"
   |take 4 json=="null"= objectToTokenList (drop 3 xs) (tokens++[("NULL","null")]) "NULL"
@@ -341,11 +350,12 @@ objectToTokenList json@(x:xs) tokens lastTokenType
 
 arrayToTokenList :: String -> [(String, String)] ->String -> Either String [(String, String)]
 arrayToTokenList "" _ _=Left "Empty String"
-arrayToTokenList (x:xs) tokens lastTokenType
+arrayToTokenList array@(x:xs) tokens lastTokenType
   |null xs=if x==']'&&not (null tokens) then Right $ tokens++[("ARRAY_CLOSE","]")] else Left $ "Unexpected JSON end by "++[x]
   |x==' '||x=='\n'=arrayToTokenList xs tokens lastTokenType
   |null tokens=if x=='[' then arrayToTokenList xs (tokens++[("ARRAY_OPEN","[")]) "ARRAY_OPEN" else Left $ "Array must start with '[' but start with "++[x]
   |x==','=if lastTokenType `elem` ["STRING","NUMBER","BOOLEAN","NULL","OBJECT","ARRAY"] then arrayToTokenList xs (tokens++[("COMMA",",")]) "COMMA" else Left "Unexpected comma"
+  |lastTokenType/="COMMA"&&lastTokenType/="ARRAY_OPEN"=Left $ "Unexpected token:"++[x]
   |x=='['=do
     let arr=getAnArrayString xs
     let tails=drop (length arr) xs
@@ -355,7 +365,9 @@ arrayToTokenList (x:xs) tokens lastTokenType
     let tails=drop (length obj) xs
     if null tails then Left "End with Array" else arrayToTokenList tails (tokens++[("OBJECT",x:obj)]) "OBJECT"
   |x=='"'=arrayToTokenList (back (=='"') xs) (tokens++[("STRING",many (/='"') xs)]) "STRING"
-  |isNumber x=arrayToTokenList (back' (not . isNumber) xs) (tokens++[("NUMBER",x:many isNumber xs)]) "NUMBER"
+  |isDigit x||x=='-'=do
+    let num=getNumber array
+    arrayToTokenList (drop (length num) array) (tokens++[("NUMBER",num)]) "NUMBER"
   |take 4 (x:xs) =="true"=arrayToTokenList (drop 3 xs) (tokens++[("BOOLEAN","true")]) "BOOLEAN"
   |take 5 (x:xs) =="false"=arrayToTokenList  (drop 4 xs) (tokens++[("BOOLEAN","false")]) "BOOLEAN"
   |take 4 (x:xs) =="null"=arrayToTokenList (drop 3 xs) (tokens++[("NULL","null")]) "NULL"
