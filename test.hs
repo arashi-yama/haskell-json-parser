@@ -1,4 +1,22 @@
-import Index (jsonString,jsonInt,jsonDouble,jsonBoolean,jsonArray,jsonObject,arrayjsonInt,arrayjsonDouble,arrayjsonString,arrayjsonArray,arrayjsonObject,tokenToString,arrayjsonBoolean, getObject, rootJson, rootArrayjson)
+import Index
+    ( jsonString,
+      jsonInt,
+      jsonDouble,
+      jsonBoolean,
+      jsonArray,
+      jsonObject,
+      arrayjsonInt,
+      arrayjsonDouble,
+      arrayjsonString,
+      arrayjsonArray,
+      arrayjsonObject,
+      tokenToString,
+      arrayjsonBoolean,
+      getObject,
+      rootJson,
+      rootArrayjson,
+      arrayjsonLength,
+      jsonKeys)
 import Data.Either ()
 
 arrayTest :: IO ()
@@ -17,7 +35,7 @@ arrayTest=do
   let ath=array>>=arrayjsonInt 2
   let nul=root>>=arrayjsonString 7
   print $ tokenToString <$> root
-  print zero 
+  print zero
   print one
   print two
   print three
@@ -50,7 +68,7 @@ objTest=do
   print minus
   print shousu
   either putStrLn (putStrLn . tokenToString) root
- 
+
 illed :: IO ()
 illed=do
   either putStrLn print $ rootJson ""
@@ -94,6 +112,21 @@ illed=do
 
 
 
-  
+
 
   print 1
+
+arrLenTest=do
+  either print (print . arrayjsonLength) $ rootArrayjson "[\"one\",65536,1.414,true,false,{\"aiueo\":[\"kakikukeko\"]},[1,2,3],null]"
+  either print (print . arrayjsonLength) $ rootArrayjson "[]"
+  either print (print . arrayjsonLength) $ rootArrayjson "[0]"
+  either print (print . arrayjsonLength) $ rootArrayjson "[0,1]"
+  either print (print . arrayjsonLength) $ rootArrayjson "[0,1,2]"
+  either print (print . arrayjsonLength) $ rootArrayjson "[0,1,2,3,4]"
+  either print (print . arrayjsonLength) $ rootArrayjson "[0,1,2,3,4,5]"
+  putStrLn ""
+
+  print 1
+
+objKeysTest=do
+  either print (print . jsonKeys) $ rootJson "{\"boolT\":true,\"taxi\":1729,\"boolF\":false,\"string\":\"oh waaa\",\"number\":42,\"minus\":-12,\"shousu\":3.14,\"nul\":null}"

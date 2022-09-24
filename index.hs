@@ -1,9 +1,11 @@
 module Index where
 import Data.Char (isDigit, isLetter)
-import Data.Either ()
+import Data.Either (fromRight)
 
-data JSONToken=OBJECT_OPEN|OBJECT_CLOSE|ARRAY_OPEN|ARRAY_CLOSE|COMMA|KEY|COLON|STRING|NUMBER|BOOLEAN|ARRAY|OBJECT|NULL|START deriving (Show,Eq)        
+
+data JSONToken=OBJECT_OPEN|OBJECT_CLOSE|ARRAY_OPEN|ARRAY_CLOSE|COMMA|KEY|COLON|STRING|NUMBER|BOOLEAN|ARRAY|OBJECT|NULL|START deriving (Show,Eq)
 type Token=(JSONToken,String)
+jsonValue=[STRING,NUMBER,BOOLEAN,NULL,OBJECT,ARRAY]
 
 tokenToString :: [Token] -> String
 tokenToString=concatMap (\(typ,value)->if typ==KEY||typ==STRING then "\""++value++"\"" else value)
@@ -106,6 +108,32 @@ rootJson json= objectToTokenList json [] START
 
 rootArrayjson :: String -> Either String [Token]
 rootArrayjson json=arrayToTokenList json [] START
+
+arrayjsonLength :: [Token] -> Either String Int
+arrayjsonLength []=Left "Syntax Error"
+arrayjsonLength [_]=Left "Syntax Error"
+arrayjsonLength ((fstType,fstValue):sndToken@(sndType,sndValue):tokens)
+  |fstType==ARRAY_OPEN=if sndType==ARRAY_CLOSE then Right 0 else arrayjsonLength (sndToken:tokens)
+  |fstType==ARRAY_CLOSE=Right 0
+  |fstType `elem` jsonValue=Right $ 1+ fromRight 0 (arrayjsonLength tokens)
+  |otherwise=Left "Syntax Error"
+
+jsonKeys :: [Token] -> Either String [String]
+jsonKeys []=Left ""
+jsonKeys ((fstType,_):tokens)
+  |fstType==OBJECT_OPEN=jsonKeysLoop tokens []
+  |otherwise=Left "Object must start with '{'"
+
+jsonKeysLoop :: [Token] -> [String] -> Either String [String]
+jsonKeysLoop [] _=Left "Syntax Error"
+jsonKeysLoop [_] _=Left "Syntax Error"
+jsonKeysLoop [_,_] _=Left "Syntax Error"
+jsonKeysLoop [_,_,_] _=Left "Syntax Error"
+jsonKeysLoop ((fstType,fstValue):(sndType,sndValue):(trdType,trdValue):(fothType,fothValue):tokens) result
+  |fstType==KEY&&sndType==COLON&&trdType `elem` jsonValue=if fothType==COMMA then jsonKeysLoop tokens (result++[fstValue])
+    else if fothType==OBJECT_CLOSE then Right (result++[fstValue])
+    else Left "Syntax Error"
+  |otherwise=Left "Syntax Error"
 
 jsonString :: String -> [Token] -> Either String String
 jsonString _ []=Left "Empty JSON input"
@@ -333,7 +361,7 @@ objectToTokenList "" _ _=Left "Empty String"
 objectToTokenList json@(x:xs) tokens lastTokenType
   |null xs=if x=='}'&&not (null tokens) then Right (tokens++[(OBJECT_CLOSE,"}")]) else Left $ "Unexpected JSON end by "++[x]
   |x==' '||x=='\n'=objectToTokenList xs tokens lastTokenType
-  |null tokens=if x=='{' then objectToTokenList xs [(OBJECT_OPEN,"{")] OBJECT_OPEN else Left $ "Object must start with '{' but start with "++[x]      
+  |null tokens=if x=='{' then objectToTokenList xs [(OBJECT_OPEN,"{")] OBJECT_OPEN else Left $ "Object must start with '{' but start with "++[x]
   |x==':'&&lastTokenType==KEY=objectToTokenList xs (tokens++[(COLON,":")]) COLON
   |x==','&&lastTokenType `elem` [STRING,NUMBER,BOOLEAN,NULL,OBJECT,ARRAY]=objectToTokenList xs (tokens++[(COMMA,",")]) COMMA
   |x=='"'&&(lastTokenType==COMMA||lastTokenType==OBJECT_OPEN)=objectToTokenList (back (=='"') xs) (tokens++[(KEY,many (/='"') xs)]) KEY
@@ -354,7 +382,6 @@ objectToTokenList json@(x:xs) tokens lastTokenType
   |take 5 json=="false"=objectToTokenList (drop 4 xs) (tokens++[(BOOLEAN,"false")]) BOOLEAN
   |take 4 json=="null"= objectToTokenList (drop 3 xs) (tokens++[(NULL,"null")]) NULL
   |otherwise=Left $ "Unsolved token:"++[x]++makeErrorText x tokens
-
 
 arrayToTokenList :: String -> [Token] -> JSONToken ->Either String [Token]
 arrayToTokenList "" _ _=Left "Empty String"
