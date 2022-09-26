@@ -2,13 +2,14 @@ module Index where
 import Data.Char (isDigit, isLetter)
 import Data.Either (fromRight)
 
-
-data JSONToken=OBJECT_OPEN|OBJECT_CLOSE|ARRAY_OPEN|ARRAY_CLOSE|COMMA|KEY|COLON|STRING|NUMBER|BOOLEAN|ARRAY|OBJECT|NULL|START deriving (Show,Eq)
+data JSONValue=JSONString|JSONNumber|JSONBoolean|JSONObject|JSONArray|JSONNull deriving (Show,Eq)
+data JSONToken=OBJECT_OPEN|OBJECT_CLOSE|ARRAY_OPEN|ARRAY_CLOSE|COMMA|KEY|COLON|VALUE JSONValue|START deriving (Show,Eq)
 type Token=(JSONToken,String)
-jsonValue=[STRING,NUMBER,BOOLEAN,NULL,OBJECT,ARRAY]
+jsonValues :: [JSONToken]
+jsonValues=[VALUE JSONString,VALUE JSONNumber,VALUE JSONBoolean,VALUE JSONObject,VALUE JSONArray,VALUE JSONNull]
 
 tokenToString :: [Token] -> String
-tokenToString=concatMap (\(typ,value)->if typ==KEY||typ==STRING then "\""++value++"\"" else value)
+tokenToString=concatMap (\(typ,value)->if typ==KEY||typ==VALUE JSONString then "\""++value++"\"" else value)
 
 --合致している間返す
 many :: (Char -> Bool) -> String -> String
@@ -115,7 +116,7 @@ arrayjsonLength [_]=Left "Syntax Error"
 arrayjsonLength ((fstType,fstValue):sndToken@(sndType,sndValue):tokens)
   |fstType==ARRAY_OPEN=if sndType==ARRAY_CLOSE then Right 0 else arrayjsonLength (sndToken:tokens)
   |fstType==ARRAY_CLOSE=Right 0
-  |fstType `elem` jsonValue=Right $ 1+ fromRight 0 (arrayjsonLength tokens)
+  |fstType `elem` jsonValues=Right $ 1+ fromRight 0 (arrayjsonLength tokens)
   |otherwise=Left "Syntax Error"
 
 jsonKeys :: [Token] -> Either String [String]
@@ -130,7 +131,7 @@ jsonKeysLoop [_] _=Left "Syntax Error"
 jsonKeysLoop [_,_] _=Left "Syntax Error"
 jsonKeysLoop [_,_,_] _=Left "Syntax Error"
 jsonKeysLoop ((fstType,fstValue):(sndType,sndValue):(trdType,trdValue):(fothType,fothValue):tokens) result
-  |fstType==KEY&&sndType==COLON&&trdType `elem` jsonValue=if fothType==COMMA then jsonKeysLoop tokens (result++[fstValue])
+  |fstType==KEY&&sndType==COLON&&trdType `elem` jsonValues=if fothType==COMMA then jsonKeysLoop tokens (result++[fstValue])
     else if fothType==OBJECT_CLOSE then Right (result++[fstValue])
     else Left "Syntax Error"
   |otherwise=Left "Syntax Error"
@@ -218,8 +219,8 @@ getObjectString _ [_,_,_]=Left "String length is not enought"
 getObjectString key ((fstType,fstValue):(sndType,sndValu):(trdType,trdValue):(fothType,fothValue):tokens)
   |not $ fstType==KEY&&sndType==COLON&&(fothType==COMMA||fothType==OBJECT_CLOSE)=Left "Syntax Error"
   |fstValue==key=case trdType of
-    STRING->Right trdValue
-    NULL->Left "null"
+    VALUE JSONString->Right trdValue
+    VALUE JSONNull->Left "null"
     _->Left $ "Couldn't match type. Exepted type:STRING. ActualType:"++show trdType
   |fothType==OBJECT_CLOSE=Left "No such a key"
   |otherwise=getObjectString key tokens
@@ -232,8 +233,8 @@ getObjectNumber _ [_,_,_]=Left "String length is not enought"
 getObjectNumber key ((fstType,fstValue):(sndType,sndValue):(trdType,trdValue):(fothType,fothValue):tokens)
   |not $ fstType==KEY&&sndType==COLON&&(fothType==COMMA||fothType==OBJECT_CLOSE)=Left "Syntax Error"
   |fstValue==key=case trdType of
-    NUMBER->Right trdValue
-    NULL->Left "null"
+    VALUE JSONNumber->Right trdValue
+    (VALUE JSONNull)->Left "null"
     _->Left $ "Couldn't match type. Exepted type:NUMBER. ActualType:"++show trdType
   |fothType==OBJECT_CLOSE=Left "No such a key"
   |otherwise=getObjectNumber key tokens
@@ -246,8 +247,8 @@ getObjectBoolean _ [_,_,_]=Left "String length is not enought"
 getObjectBoolean key ((fstType,fstValue):(sndType,sndValue):(trdType,trdValue):(fothType,fothValue):tokens)
   |not $ fstType==KEY&&sndType==COLON&&(fothType==COMMA||fothType==OBJECT_CLOSE)=Left "Syntax Error"
   |fstValue==key=case trdType of
-    BOOLEAN->Right $ trdValue=="true"
-    NULL->Left "null"
+    VALUE JSONBoolean->Right $ trdValue=="true"
+    (VALUE JSONNull)->Left "null"
     _->Left $ "Couldnt match type. Exepted type:BOOLEAN. ActualType:"++show trdType
   |fothType==OBJECT_CLOSE=Left "No such a key"
   |otherwise=getObjectBoolean key tokens
@@ -260,8 +261,8 @@ getObject _ [_,_,_]=Left "String length is not enought"
 getObject key ((fstType,fstValue):(sndType,sndValue):(trdType,trdValue):(fothType,fothValue):tokens)
   |not $ fstType==KEY&&sndType==COLON&&(fothType==COMMA||fothType==OBJECT_CLOSE)=Left "Syntax Error"
   |fstValue==key=case trdType of
-    OBJECT->objectToTokenList trdValue [] START
-    NULL->Left "null"
+    VALUE JSONObject->objectToTokenList trdValue [] START
+    (VALUE JSONNull)->Left "null"
     _->Left $ "Couldn't match type. Exepted type:OBJECT. ActualType:"++show trdType
   |fothType==OBJECT_CLOSE=Left "No such a key"
   |otherwise=getObject key tokens
@@ -275,8 +276,8 @@ getObjectArray _ [_,_,_]=Left "String length is not enought"
 getObjectArray key ((fstType,fstValue):(sndType,sndValue):(trdType,trdValue):(fothType,fothValue):tokens)
   |not $ fstType==KEY&&sndType==COLON&&(fothType==COMMA||fothType==OBJECT_CLOSE)=Left "Syntax Error"
   |fstValue==key=case trdType of
-    ARRAY->arrayToTokenList trdValue [] START
-    NULL->Left "null"
+    VALUE JSONArray->arrayToTokenList trdValue [] START
+    (VALUE JSONNull)->Left "null"
     _->Left $ "Couldn't match type. Exepted type:ARRAY. ActualType:"++show trdType
   |fothType==OBJECT_CLOSE=Left "No such a key"
   |fothType==OBJECT_CLOSE=Left "No such a key"
@@ -288,8 +289,8 @@ getArrayString _ [_]=Left "String length is not enought"
 getArrayString index ((fstType,fstValue):(sndType,sndValue):tokens)
   |sndType/=COMMA&&sndType/=ARRAY_CLOSE=Left "Syntax Error"
   |index==0=case fstType of
-    STRING->Right fstValue
-    NULL->Left "null"
+    VALUE JSONString->Right fstValue
+    (VALUE JSONNull)->Left "null"
     _->Left $ "Couldn't match type. Exepted type:String. ActualType:"++show fstType
   |sndType==ARRAY_CLOSE=Left "Index is too learge"
   |index>0=getArrayString (index-1) tokens
@@ -302,8 +303,8 @@ getArrayNumber _ [_]=Left "String length is not enought"
 getArrayNumber index ((fstType,fstValue):(sndType,sndValue):tokens)
   |sndType/=COMMA&&sndType/=ARRAY_CLOSE=Left "Syntax Error"
   |index==0=case fstType of
-    NUMBER->Right fstValue
-    NULL->Left "null"
+    VALUE JSONNumber->Right fstValue
+    (VALUE JSONNull)->Left "null"
     _->Left $ "Couldn't match type. Exepted type:NUMBER. ActualType:"++show fstType
   |sndType==ARRAY_CLOSE=Left "Index is too learge"
   |index>0=getArrayNumber (index-1) tokens
@@ -315,8 +316,8 @@ getArrayBoolean _ [_]=Left "String length is not enought"
 getArrayBoolean index ((fstType,fstValue):(sndType,sndValue):tokens)
   |sndType/=COMMA&&sndType/=ARRAY_CLOSE=Left "Syntax Error"
   |index==0=case fstType of
-    BOOLEAN->Right $ fstValue=="true"
-    NULL->Left "null"
+    VALUE JSONBoolean->Right $ fstValue=="true"
+    (VALUE JSONNull)->Left "null"
     _->Left $ "Couldn't match type. Exepted type:BOOLEAN. ActualType:"++show fstType
   |sndType==ARRAY_CLOSE=Left "Index is too learge"
   |index>0=getArrayBoolean (index-1) tokens
@@ -328,8 +329,8 @@ getArrayArray _ [_]=Left "String length is not enought"
 getArrayArray index ((fstType,fstValue):(sndType,sndValue):tokens)
   |sndType/=COMMA&&sndType/=ARRAY_CLOSE=Left "Syntax Error"
   |index==0=case fstType of
-    ARRAY->arrayToTokenList fstValue [] START
-    NULL->Left "null"
+    VALUE JSONArray->arrayToTokenList fstValue [] START
+    (VALUE JSONNull)->Left "null"
     _->Left $ "Couldn't match type. Exepted type:ARRAY. ActualType:"++show fstType
   |sndType==ARRAY_CLOSE=Left "Index is too learge"
   |index>0=getArrayArray (index-1) tokens
@@ -341,8 +342,8 @@ getArrayObject _ [_]=Left "String length is not enought"
 getArrayObject index ((fstType,fstValue):(sndType,sndValue):tokens)
   |sndType/=COMMA&&sndType/=ARRAY_CLOSE=Left "Syntax Error"
   |index==0=case fstType of
-    OBJECT->objectToTokenList fstValue [] START
-    NULL->Left "null"
+    VALUE JSONObject->objectToTokenList fstValue [] START
+    (VALUE JSONNull)->Left "null"
     _->Left $ "Couldn't match type. Exepted type:OBJECT. ActualType:"++show fstType
   |sndType==ARRAY_CLOSE=Left "Index is too learge"
   |index>0=getArrayObject (index-1) tokens
@@ -363,24 +364,24 @@ objectToTokenList json@(x:xs) tokens lastTokenType
   |x==' '||x=='\n'=objectToTokenList xs tokens lastTokenType
   |null tokens=if x=='{' then objectToTokenList xs [(OBJECT_OPEN,"{")] OBJECT_OPEN else Left $ "Object must start with '{' but start with "++[x]
   |x==':'&&lastTokenType==KEY=objectToTokenList xs (tokens++[(COLON,":")]) COLON
-  |x==','&&lastTokenType `elem` [STRING,NUMBER,BOOLEAN,NULL,OBJECT,ARRAY]=objectToTokenList xs (tokens++[(COMMA,",")]) COMMA
+  |x==','&&lastTokenType `elem` jsonValues=objectToTokenList xs (tokens++[(COMMA,",")]) COMMA
   |x=='"'&&(lastTokenType==COMMA||lastTokenType==OBJECT_OPEN)=objectToTokenList (back (=='"') xs) (tokens++[(KEY,many (/='"') xs)]) KEY
   |lastTokenType/=COLON=Left $ "Unepected token:"++[x]++makeErrorText x tokens
   |x=='['=do
     let arr=getAnArrayString xs
     let tails=drop (length arr) xs
-    if null tails then Left "End with Array" else objectToTokenList tails (tokens++[(ARRAY,x:arr)]) ARRAY
+    if null tails then Left "End with Array" else objectToTokenList tails (tokens++[(VALUE JSONArray,x:arr)]) (VALUE JSONArray)
   |x=='{'=do
     let obj=getAnObjectString xs
     let tails=drop (length obj) xs
-    if null tails then Left "End with Object" else objectToTokenList tails (tokens++[(OBJECT,x:obj)]) OBJECT
-  |x=='"'=objectToTokenList (back (=='"') xs) (tokens++[(STRING,many (/='"') xs)]) STRING
+    if null tails then Left "End with Object" else objectToTokenList tails (tokens++[(VALUE JSONObject,x:obj)]) (VALUE JSONObject)
+  |x=='"'=objectToTokenList (back (=='"') xs) (tokens++[(VALUE JSONString,many (/='"') xs)]) (VALUE JSONString)
   |isDigit x||x=='-'=do
     let num=getNumber json
-    objectToTokenList (drop (length num) json) (tokens++[(NUMBER,num)]) NUMBER
-  |take 4 json=="true"=objectToTokenList (drop 3 xs) (tokens++[(BOOLEAN,"true")]) BOOLEAN
-  |take 5 json=="false"=objectToTokenList (drop 4 xs) (tokens++[(BOOLEAN,"false")]) BOOLEAN
-  |take 4 json=="null"= objectToTokenList (drop 3 xs) (tokens++[(NULL,"null")]) NULL
+    objectToTokenList (drop (length num) json) (tokens++[(VALUE JSONNumber,num)]) (VALUE JSONNumber)
+  |take 4 json=="true"=objectToTokenList (drop 3 xs) (tokens++[(VALUE JSONBoolean,"true")]) (VALUE JSONBoolean)
+  |take 5 json=="false"=objectToTokenList (drop 4 xs) (tokens++[(VALUE JSONBoolean,"false")]) (VALUE JSONBoolean)
+  |take 4 json=="null"= objectToTokenList (drop 3 xs) (tokens++[((VALUE JSONNull),"null")]) (VALUE JSONNull)
   |otherwise=Left $ "Unsolved token:"++[x]++makeErrorText x tokens
 
 arrayToTokenList :: String -> [Token] -> JSONToken ->Either String [Token]
@@ -389,21 +390,21 @@ arrayToTokenList array@(x:xs) tokens lastTokenType
   |null xs=if x==']'&&not (null tokens) then Right $ tokens++[(ARRAY_CLOSE,"]")] else Left $ "Unexpected JSON end by "++[x]
   |x==' '||x=='\n'=arrayToTokenList xs tokens lastTokenType
   |null tokens&&x=='['=arrayToTokenList xs (tokens++[(ARRAY_OPEN,"[")]) ARRAY_OPEN
-  |x==','&&lastTokenType `elem` [STRING,NUMBER,BOOLEAN,NULL,OBJECT,ARRAY]=arrayToTokenList xs (tokens++[(COMMA,",")]) COMMA
+  |x==','&&lastTokenType `elem` jsonValues=arrayToTokenList xs (tokens++[(COMMA,",")]) COMMA
   |lastTokenType/=COMMA&&lastTokenType/=ARRAY_OPEN=Left $ "Unexpected token:"++[x]++makeErrorText x tokens
   |x=='['=do
     let arr=getAnArrayString xs
     let tails=drop (length arr) xs
-    if null tails then Left "End with Array" else arrayToTokenList tails (tokens++[(ARRAY,x:arr)]) ARRAY
+    if null tails then Left "End with Array" else arrayToTokenList tails (tokens++[(VALUE JSONArray,x:arr)]) (VALUE JSONArray)
   |x=='{'=do
     let obj=getAnObjectString xs
     let tails=drop (length obj) xs
-    if null tails then Left "End with Array" else arrayToTokenList tails (tokens++[(OBJECT,x:obj)]) OBJECT
-  |x=='"'=arrayToTokenList (back (=='"') xs) (tokens++[(STRING,many (/='"') xs)]) STRING
+    if null tails then Left "End with Array" else arrayToTokenList tails (tokens++[(VALUE JSONObject,x:obj)]) (VALUE JSONObject)
+  |x=='"'=arrayToTokenList (back (=='"') xs) (tokens++[(VALUE JSONString,many (/='"') xs)]) (VALUE JSONString)
   |isDigit x||x=='-'=do
     let num=getNumber array
-    arrayToTokenList (drop (length num) array) (tokens++[(NUMBER,num)]) NUMBER
-  |take 4 (x:xs) =="true"=arrayToTokenList (drop 3 xs) (tokens++[(BOOLEAN,"true")]) BOOLEAN
-  |take 5 (x:xs) =="false"=arrayToTokenList  (drop 4 xs) (tokens++[(BOOLEAN,"false")]) BOOLEAN
-  |take 4 (x:xs) =="null"=arrayToTokenList (drop 3 xs) (tokens++[(NULL,"null")]) NULL
+    arrayToTokenList (drop (length num) array) (tokens++[(VALUE JSONNumber,num)]) (VALUE JSONNumber)
+  |take 4 (x:xs) =="true"=arrayToTokenList (drop 3 xs) (tokens++[(VALUE JSONBoolean,"true")]) (VALUE JSONBoolean)
+  |take 5 (x:xs) =="false"=arrayToTokenList  (drop 4 xs) (tokens++[(VALUE JSONBoolean,"false")]) (VALUE JSONBoolean)
+  |take 4 (x:xs) =="null"=arrayToTokenList (drop 3 xs) (tokens++[((VALUE JSONNull),"null")]) (VALUE JSONNull)
   |otherwise=Left $ "Unsolved token:"++[x]++makeErrorText x tokens
